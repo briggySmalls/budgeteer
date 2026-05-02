@@ -85,13 +85,17 @@ def main():
     )
 
     with tab1:
-        st.plotly_chart(phase_liquidity_chart(ledger), use_container_width=True)
+        st.plotly_chart(phase_liquidity_chart(ledger), theme="streamlit", use_container_width=True)
 
     with tab2:
-        st.plotly_chart(monthly_net_flow_chart(ledger), use_container_width=True)
+        st.plotly_chart(monthly_net_flow_chart(ledger), theme="streamlit", use_container_width=True)
 
     with tab3:
-        st.plotly_chart(waterfall_chart(phase_agg, starting_savings), use_container_width=True)
+        st.plotly_chart(
+            waterfall_chart(phase_agg, starting_savings),
+            theme="streamlit",
+            use_container_width=True,
+        )
 
     with tab4:
         display = ledger.copy()

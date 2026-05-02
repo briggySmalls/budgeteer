@@ -1,8 +1,8 @@
-[theme]
+[theme.light]
 primaryColor = "#4CAF50"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F5F5F5"
-textColor = "#333333"
+
+[theme.dark]
+primaryColor = "#4CAF50"
 
 [server]
 runOnSave = true

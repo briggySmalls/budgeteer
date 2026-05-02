@@ -47,7 +47,6 @@ def _add_phase_bands(fig: go.Figure, ledger: pd.DataFrame) -> None:
 def _apply_currency_layout(fig: go.Figure, title: str) -> None:
     fig.update_layout(
         title=title,
-        template="plotly_white",
         xaxis_title="Month",
         yaxis_title="Amount (£)",
         yaxis_tickprefix="£",
