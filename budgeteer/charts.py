@@ -92,7 +92,6 @@ def _add_actuals_overlay(fig: go.Figure, actuals: list[LiquidityActual]) -> None
             name="Actual Liquidity",
             marker=dict(symbol="diamond", size=8, color="#2c3e50"),
             line=dict(color="#2c3e50", width=1.5),
-            yaxis="y",
         )
     )
 
@@ -111,7 +110,6 @@ def combined_monthly_chart(
             y=ledger["net_flow"],
             marker_color=bar_colors,
             name="Net Flow",
-            yaxis="y2",
         )
     )
 
@@ -123,7 +121,6 @@ def combined_monthly_chart(
             name="Ending Liquidity",
             line=dict(color="#636EFA", width=2),
             marker=dict(size=5),
-            yaxis="y",
         )
     )
 
@@ -143,20 +140,13 @@ def combined_monthly_chart(
         title="Monthly View",
         xaxis_title="Month",
         yaxis=dict(
-            title="Liquidity (£)",
+            title="Amount (£)",
             tickprefix="£",
             tickformat=",.0f",
-        ),
-        yaxis2=dict(
-            title="Net Flow (£)",
-            tickprefix="£",
-            tickformat=",.0f",
-            overlaying="y",
-            side="right",
         ),
         hovermode="x unified",
-        margin=dict(t=60, b=40, r=120),
-        legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.12),
+        margin=dict(t=60, b=40, r=80),
+        legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.05),
     )
 
     return fig
