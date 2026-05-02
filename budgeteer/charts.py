@@ -155,8 +155,8 @@ def combined_monthly_chart(
             side="right",
         ),
         hovermode="x unified",
-        margin=dict(t=60, b=40),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(t=60, b=40, r=120),
+        legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.12),
     )
 
     return fig
