@@ -87,6 +87,59 @@ def compute_ledger(
     return pd.DataFrame(rows)
 
 
+def aggregate_cashflows_in_period(
+    timeline: list[date],
+    phases: list[Phase],
+    cash_flows: list[AnyCashFlow],
+    starting_savings: float,
+    period_start: date,
+    period_end: date,
+) -> dict:
+    if period_end < period_start:
+        raise EngineError(
+            f"period_end ({period_end}) must be on or after period_start ({period_start})"
+        )
+
+    ledger = compute_ledger(timeline, phases, cash_flows, starting_savings)
+
+    start_month = period_start.replace(day=1)
+    end_month = period_end.replace(day=1)
+
+    in_period = ledger[(ledger["month_year"] >= start_month) & (ledger["month_year"] <= end_month)]
+    if in_period.empty:
+        raise EngineError(
+            f"Period [{period_start}, {period_end}] does not overlap the forecast timeline"
+        )
+
+    starting_liquidity = float(in_period.iloc[0]["starting_liquidity"])
+    ending_liquidity = float(in_period.iloc[-1]["ending_liquidity"])
+
+    months = [m for m in timeline if start_month <= m <= end_month]
+    totals: dict[str, dict] = {}
+    for cf in cash_flows:
+        amount = sum(cf.amount for m in months if _is_active(cf, m))
+        if amount == 0:
+            continue
+        key = cf.name
+        if key in totals:
+            totals[key]["amount"] += amount
+        else:
+            totals[key] = {"name": cf.name, "direction": cf.direction, "amount": amount}
+
+    items = sorted(
+        totals.values(),
+        key=lambda it: (it["direction"] != Direction.INFLOW, -it["amount"]),
+    )
+
+    return {
+        "starting_liquidity": starting_liquidity,
+        "ending_liquidity": ending_liquidity,
+        "items": items,
+        "period_start": start_month,
+        "period_end": end_month,
+    }
+
+
 def aggregate_by_phase(ledger: pd.DataFrame) -> pd.DataFrame:
     phase_rows = ledger[ledger["active_phase"].notna()]
     if phase_rows.empty:

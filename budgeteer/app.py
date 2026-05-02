@@ -6,12 +6,8 @@ from pathlib import Path
 
 import streamlit as st
 
-from budgeteer.charts import (
-    monthly_net_flow_chart,
-    phase_liquidity_chart,
-    waterfall_chart,
-)
-from budgeteer.engine import aggregate_by_phase, build_timeline, compute_ledger
+from budgeteer.charts import combined_monthly_chart, period_waterfall_chart
+from budgeteer.engine import aggregate_cashflows_in_period, build_timeline, compute_ledger
 from budgeteer.ingest import load_inputs
 from budgeteer.models import BudgeteerError
 
@@ -78,26 +74,67 @@ def main():
 
     timeline = build_timeline(phases)
     ledger = compute_ledger(timeline, phases, cash_flows, starting_savings)
-    phase_agg = aggregate_by_phase(ledger)
 
-    tab1, tab2, tab3, tab4 = st.tabs(
-        ["Liquidity Forecast", "Monthly Net Flow", "Phase Waterfall", "Ledger Data"]
-    )
+    tab1, tab2, tab3 = st.tabs(["Monthly View", "Period Waterfall", "Ledger Data"])
 
     with tab1:
-        st.plotly_chart(phase_liquidity_chart(ledger), theme="streamlit", use_container_width=True)
+        st.plotly_chart(combined_monthly_chart(ledger), theme="streamlit", use_container_width=True)
+        st.caption("Click legend entries to toggle traces. Double-click to isolate.")
 
     with tab2:
-        st.plotly_chart(monthly_net_flow_chart(ledger), theme="streamlit", use_container_width=True)
-
-    with tab3:
-        st.plotly_chart(
-            waterfall_chart(phase_agg, starting_savings),
-            theme="streamlit",
-            use_container_width=True,
+        mode = st.radio(
+            "Period selection",
+            ["Phase", "Single month", "Custom range"],
+            horizontal=True,
         )
 
-    with tab4:
+        timeline_start = timeline[0]
+        timeline_end = timeline[-1]
+
+        if mode == "Phase":
+            phase_names = [p.name for p in phases]
+            selected_name = st.selectbox("Select phase", phase_names)
+            selected_phase = next(p for p in phases if p.name == selected_name)
+            period_start = selected_phase.start_date
+            period_end = selected_phase.end_date
+
+        elif mode == "Single month":
+            month_labels = [m.strftime("%b %Y") for m in timeline]
+            selected_label = st.selectbox("Select month", month_labels)
+            selected_month = timeline[month_labels.index(selected_label)]
+            period_start = selected_month
+            period_end = selected_month
+
+        else:
+            col1, col2 = st.columns(2)
+            with col1:
+                period_start = st.date_input(
+                    "From",
+                    value=timeline_start,
+                    min_value=timeline_start,
+                    max_value=timeline_end,
+                )
+            with col2:
+                period_end = st.date_input(
+                    "To",
+                    value=timeline_end,
+                    min_value=timeline_start,
+                    max_value=timeline_end,
+                )
+
+        try:
+            period_summary = aggregate_cashflows_in_period(
+                timeline, phases, cash_flows, starting_savings, period_start, period_end
+            )
+            st.plotly_chart(
+                period_waterfall_chart(period_summary),
+                theme="streamlit",
+                use_container_width=True,
+            )
+        except BudgeteerError as e:
+            st.error(f"Period error: {e}")
+
+    with tab3:
         display = ledger.copy()
         display["month_year"] = display["month_year"].apply(lambda d: d.strftime("%b %Y"))
         for col in [

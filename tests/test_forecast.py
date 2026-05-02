@@ -6,8 +6,23 @@ runs the full pipeline, and checks phase-level totals and balances.
 
 from datetime import date
 
-from budgeteer.engine import aggregate_by_phase, build_timeline, compute_ledger
+import pytest
+
+from budgeteer.engine import (
+    aggregate_by_phase,
+    aggregate_cashflows_in_period,
+    build_timeline,
+    compute_ledger,
+)
 from budgeteer.ingest import load_inputs
+from budgeteer.models import (
+    Direction,
+    EngineError,
+    Frequency,
+    OneOffCashFlow,
+    Phase,
+    RecurringCashFlow,
+)
 from budgeteer.odswriter import write_ods
 
 
@@ -183,3 +198,131 @@ class TestPhaseGap:
         assert len(agg) == 2
         assert agg[agg["active_phase"] == "Before"].iloc[0]["months"] == 2
         assert agg[agg["active_phase"] == "After"].iloc[0]["months"] == 2
+
+
+class TestAggregateCashflowsInPeriod:
+    """Unit tests for aggregate_cashflows_in_period."""
+
+    def _setup(self):
+        phases = [
+            Phase("P1", "Working", date(2026, 1, 1), date(2026, 6, 30)),
+            Phase("P2", "Break", date(2026, 7, 1), date(2026, 12, 31)),
+        ]
+        cash_flows = [
+            RecurringCashFlow(
+                "CF1",
+                "Salary",
+                Direction.INFLOW,
+                5000.0,
+                Frequency.MONTHLY,
+                start_date=date(2026, 1, 1),
+                end_date=date(2026, 6, 30),
+            ),
+            RecurringCashFlow("CF2", "Rent", Direction.OUTFLOW, 1200.0, Frequency.MONTHLY),
+            OneOffCashFlow("CF3", "Bonus", Direction.INFLOW, 3000.0, date=date(2026, 3, 1)),
+        ]
+        timeline = build_timeline(phases)
+        return timeline, phases, cash_flows
+
+    def test_phase_aligned_period(self):
+        timeline, phases, cash_flows = self._setup()
+        result = aggregate_cashflows_in_period(
+            timeline,
+            phases,
+            cash_flows,
+            10000.0,
+            date(2026, 1, 1),
+            date(2026, 6, 30),
+        )
+        items_by_name = {it["name"]: it for it in result["items"]}
+        # Salary: 5000 * 6 months = 30000
+        assert items_by_name["Salary"]["amount"] == 30000
+        # Rent: 1200 * 6 months = 7200 (active all year, but only 6 months in period)
+        assert items_by_name["Rent"]["amount"] == 7200
+        # Bonus fires once in Mar
+        assert items_by_name["Bonus"]["amount"] == 3000
+
+    def test_single_month(self):
+        timeline, phases, cash_flows = self._setup()
+        result = aggregate_cashflows_in_period(
+            timeline,
+            phases,
+            cash_flows,
+            10000.0,
+            date(2026, 3, 1),
+            date(2026, 3, 31),
+        )
+        items_by_name = {it["name"]: it for it in result["items"]}
+        assert items_by_name["Salary"]["amount"] == 5000
+        assert items_by_name["Rent"]["amount"] == 1200
+        assert items_by_name["Bonus"]["amount"] == 3000
+
+    def test_period_with_no_cashflows_returns_empty_items(self):
+        phases = [Phase("P1", "Quiet", date(2026, 1, 1), date(2026, 3, 31))]
+        timeline = build_timeline(phases)
+        result = aggregate_cashflows_in_period(
+            timeline,
+            phases,
+            [],
+            5000.0,
+            date(2026, 1, 1),
+            date(2026, 3, 31),
+        )
+        assert result["items"] == []
+        assert result["starting_liquidity"] == 5000.0
+        assert result["ending_liquidity"] == 5000.0
+
+    def test_starting_and_ending_liquidity_match_ledger(self):
+        timeline, phases, cash_flows = self._setup()
+        ledger = compute_ledger(timeline, phases, cash_flows, 10000.0)
+        result = aggregate_cashflows_in_period(
+            timeline,
+            phases,
+            cash_flows,
+            10000.0,
+            date(2026, 3, 1),
+            date(2026, 3, 1),
+        )
+        mar = ledger[ledger["month_year"] == date(2026, 3, 1)].iloc[0]
+        assert result["starting_liquidity"] == mar["starting_liquidity"]
+        assert result["ending_liquidity"] == mar["ending_liquidity"]
+
+    def test_inflows_ordered_before_outflows(self):
+        timeline, phases, cash_flows = self._setup()
+        result = aggregate_cashflows_in_period(
+            timeline,
+            phases,
+            cash_flows,
+            10000.0,
+            date(2026, 1, 1),
+            date(2026, 6, 30),
+        )
+        directions = [it["direction"].value for it in result["items"]]
+        inflow_indices = [i for i, d in enumerate(directions) if d == "Inflow"]
+        outflow_indices = [i for i, d in enumerate(directions) if d == "Outflow"]
+        if inflow_indices and outflow_indices:
+            assert max(inflow_indices) < min(outflow_indices)
+
+    def test_period_outside_timeline_raises(self):
+        timeline, phases, cash_flows = self._setup()
+        with pytest.raises(EngineError):
+            aggregate_cashflows_in_period(
+                timeline,
+                phases,
+                cash_flows,
+                10000.0,
+                date(2030, 1, 1),
+                date(2030, 6, 30),
+            )
+
+    def test_end_before_start_raises(self):
+        timeline, phases, cash_flows = self._setup()
+        with pytest.raises(EngineError):
+            aggregate_cashflows_in_period(
+                timeline,
+                phases,
+                cash_flows,
+                10000.0,
+                date(2026, 6, 1),
+                date(2026, 1, 1),
+            )

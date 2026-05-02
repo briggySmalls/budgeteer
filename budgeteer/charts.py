@@ -44,20 +44,20 @@ def _add_phase_bands(fig: go.Figure, ledger: pd.DataFrame) -> None:
         )
 
 
-def _apply_currency_layout(fig: go.Figure, title: str) -> None:
-    fig.update_layout(
-        title=title,
-        xaxis_title="Month",
-        yaxis_title="Amount (£)",
-        yaxis_tickprefix="£",
-        yaxis_tickformat=",.0f",
-        hovermode="x unified",
-        margin=dict(t=60, b=40),
-    )
+def combined_monthly_chart(ledger: pd.DataFrame) -> go.Figure:
+    bar_colors = ["#2ecc71" if v >= 0 else "#e74c3c" for v in ledger["net_flow"]]
 
-
-def phase_liquidity_chart(ledger: pd.DataFrame) -> go.Figure:
     fig = go.Figure()
+
+    fig.add_trace(
+        go.Bar(
+            x=ledger["month_year"],
+            y=ledger["net_flow"],
+            marker_color=bar_colors,
+            name="Net Flow",
+            yaxis="y",
+        )
+    )
 
     fig.add_trace(
         go.Scatter(
@@ -67,6 +67,7 @@ def phase_liquidity_chart(ledger: pd.DataFrame) -> go.Figure:
             name="Ending Liquidity",
             line=dict(color="#636EFA", width=2),
             marker=dict(size=5),
+            yaxis="y2",
         )
     )
 
@@ -80,39 +81,46 @@ def phase_liquidity_chart(ledger: pd.DataFrame) -> go.Figure:
     )
 
     _add_phase_bands(fig, ledger)
-    _apply_currency_layout(fig, "Liquidity Forecast")
-    return fig
 
-
-def monthly_net_flow_chart(ledger: pd.DataFrame) -> go.Figure:
-    colors = ["#2ecc71" if v >= 0 else "#e74c3c" for v in ledger["net_flow"]]
-
-    fig = go.Figure()
-    fig.add_trace(
-        go.Bar(
-            x=ledger["month_year"],
-            y=ledger["net_flow"],
-            marker_color=colors,
-            name="Net Flow",
-        )
+    fig.update_layout(
+        title="Monthly View",
+        xaxis_title="Month",
+        yaxis=dict(
+            title="Net Flow (£)",
+            tickprefix="£",
+            tickformat=",.0f",
+        ),
+        yaxis2=dict(
+            title="Liquidity (£)",
+            tickprefix="£",
+            tickformat=",.0f",
+            overlaying="y",
+            side="right",
+        ),
+        hovermode="x unified",
+        margin=dict(t=60, b=40),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
 
-    _add_phase_bands(fig, ledger)
-    _apply_currency_layout(fig, "Monthly Net Cash Flow")
     return fig
 
 
-def waterfall_chart(phase_agg: pd.DataFrame, starting_savings: float) -> go.Figure:
-    labels = ["Starting Savings"]
-    values = [starting_savings]
+def period_waterfall_chart(period_summary: dict) -> go.Figure:
+    start = period_summary["period_start"]
+    end = period_summary["period_end"]
+    title = f"Cashflow Waterfall — {start.strftime('%b %Y')} → {end.strftime('%b %Y')}"
+
+    labels = ["Starting Liquidity"]
+    values = [period_summary["starting_liquidity"]]
     measures = ["absolute"]
 
-    for _, row in phase_agg.iterrows():
-        labels.append(row["active_phase"])
-        values.append(row["net_flow"])
+    for item in period_summary["items"]:
+        labels.append(item["name"])
+        signed = item["amount"] if item["direction"].value == "Inflow" else -item["amount"]
+        values.append(signed)
         measures.append("relative")
 
-    labels.append("Final Balance")
+    labels.append("Ending Liquidity")
     values.append(0)
     measures.append("total")
 
@@ -128,6 +136,13 @@ def waterfall_chart(phase_agg: pd.DataFrame, starting_savings: float) -> go.Figu
         )
     )
 
-    _apply_currency_layout(fig, "Savings Waterfall by Phase")
-    fig.update_layout(xaxis_title="Phase")
+    fig.update_layout(
+        title=title,
+        xaxis_title="Cash Flow",
+        yaxis_title="Amount (£)",
+        yaxis_tickprefix="£",
+        yaxis_tickformat=",.0f",
+        margin=dict(t=60, b=40),
+    )
+
     return fig
