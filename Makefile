@@ -1,4 +1,4 @@
-.PHONY: run test lint format template setup
+.PHONY: run test lint format setup
 
 setup:            ## Install deps and pre-commit hooks
 	uv sync
@@ -17,6 +17,3 @@ lint:             ## Run linter checks
 format:           ## Auto-format and fix lint issues
 	uv run ruff format .
 	uv run ruff check --fix .
-
-template:         ## Generate model_inputs.ods template
-	uv run python scripts/create_template.py
