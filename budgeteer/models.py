@@ -86,3 +86,9 @@ class OneOffCashFlow(CashFlow):
 
 
 AnyCashFlow = RecurringCashFlow | OneOffCashFlow
+
+
+@dataclass(frozen=True)
+class LiquidityActual:
+    date: date
+    amount: float  # may be negative

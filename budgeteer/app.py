@@ -52,7 +52,7 @@ def main():
 
     mtime = _get_file_mtime()
     try:
-        starting_savings, phases, cash_flows = _load_data(mtime)
+        phases, cash_flows, actuals = _load_data(mtime)
     except BudgeteerError as e:
         st.error(f"Data Error: {e}")
         st.stop()
@@ -60,25 +60,35 @@ def main():
         st.warning("File may be locked by LibreOffice. Retrying...")
         time.sleep(0.5)
         try:
-            starting_savings, phases, cash_flows = _load_data(mtime)
+            phases, cash_flows, actuals = _load_data(mtime)
         except Exception as e:
             st.error(f"Could not read file: {e}")
             st.stop()
 
     with st.sidebar:
         st.header("Model Summary")
-        st.metric("Starting Savings", f"£{starting_savings:,.2f}")
         st.metric("Phases", len(phases))
         st.metric("Cash Flows", len(cash_flows))
+        if actuals:
+            latest_actual = max(actuals, key=lambda a: a.date)
+            st.metric(
+                "Latest Actual",
+                f"£{latest_actual.amount:,.2f}",
+                help=f"As of {latest_actual.date}",
+            )
         st.caption(f"Last updated: {datetime.fromtimestamp(mtime):%H:%M:%S}")
 
     timeline = build_timeline(phases)
-    ledger = compute_ledger(timeline, phases, cash_flows, starting_savings)
+    ledger = compute_ledger(timeline, phases, cash_flows, actuals or None)
 
     tab1, tab2, tab3 = st.tabs(["Monthly View", "Period Waterfall", "Ledger Data"])
 
     with tab1:
-        st.plotly_chart(combined_monthly_chart(ledger), theme="streamlit", use_container_width=True)
+        st.plotly_chart(
+            combined_monthly_chart(ledger, actuals or None),
+            theme="streamlit",
+            use_container_width=True,
+        )
         st.caption("Click legend entries to toggle traces. Double-click to isolate.")
 
     with tab2:
@@ -124,7 +134,7 @@ def main():
 
         try:
             period_summary = aggregate_cashflows_in_period(
-                timeline, phases, cash_flows, starting_savings, period_start, period_end
+                timeline, phases, cash_flows, period_start, period_end, actuals or None
             )
             st.plotly_chart(
                 period_waterfall_chart(period_summary),

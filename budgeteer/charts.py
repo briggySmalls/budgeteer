@@ -3,6 +3,8 @@ from __future__ import annotations
 import pandas as pd
 import plotly.graph_objects as go
 
+from budgeteer.models import LiquidityActual
+
 PHASE_COLORS = [
     "rgba(99, 110, 250, 0.1)",
     "rgba(239, 85, 59, 0.1)",
@@ -44,7 +46,48 @@ def _add_phase_bands(fig: go.Figure, ledger: pd.DataFrame) -> None:
         )
 
 
-def combined_monthly_chart(ledger: pd.DataFrame) -> go.Figure:
+def _add_actuals_overlay(fig: go.Figure, actuals: list[LiquidityActual]) -> None:
+    if not actuals:
+        return
+
+    latest = max(actuals, key=lambda a: a.date)
+    earliest = min(actuals, key=lambda a: a.date)
+
+    fig.add_vrect(
+        x0=earliest.date,
+        x1=latest.date,
+        fillcolor="rgba(0, 0, 0, 0.08)",
+        line_width=0,
+        layer="below",
+    )
+
+    fig.add_vline(
+        x=str(latest.date),
+        line_dash="dash",
+        line_color="rgba(0, 0, 0, 0.45)",
+        line_width=1,
+        annotation_text="Latest actual",
+        annotation_position="top right",
+        annotation_font_size=11,
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=[a.date for a in actuals],
+            y=[a.amount for a in actuals],
+            mode="markers+lines",
+            name="Actual Liquidity",
+            marker=dict(symbol="diamond", size=8, color="#2c3e50"),
+            line=dict(color="#2c3e50", width=1.5),
+            yaxis="y2",
+        )
+    )
+
+
+def combined_monthly_chart(
+    ledger: pd.DataFrame,
+    actuals: list[LiquidityActual] | None = None,
+) -> go.Figure:
     bar_colors = ["#2ecc71" if v >= 0 else "#e74c3c" for v in ledger["net_flow"]]
 
     fig = go.Figure()
@@ -81,6 +124,7 @@ def combined_monthly_chart(ledger: pd.DataFrame) -> go.Figure:
     )
 
     _add_phase_bands(fig, ledger)
+    _add_actuals_overlay(fig, actuals or [])
 
     fig.update_layout(
         title="Monthly View",

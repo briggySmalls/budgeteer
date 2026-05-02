@@ -27,8 +27,8 @@ from budgeteer.odswriter import _add_cell, _add_formula_date_cell
 # ---------------------------------------------------------------------------
 # Spreadsheet cell references for the two anchor dates on the Config sheet
 # ---------------------------------------------------------------------------
-PREG_START = "[.Config.$B$2]"
-BIRTH_DATE = "[.Config.$C$2]"
+PREG_START = "[.Config.$A$2]"
+BIRTH_DATE = "[.Config.$B$2]"
 
 
 # ---------------------------------------------------------------------------
@@ -47,13 +47,12 @@ def _build_config(doc, preg_start: date) -> None:
     birth = _edate(preg_start, 9)
     t = Table(name="Config")
     hdr = TableRow()
-    for h in ["Starting_Savings", "Preg_Start", "Birth_Date"]:
+    for h in ["Preg_Start", "Birth_Date"]:
         _add_cell(hdr, h)
     t.addElement(hdr)
     row = TableRow()
-    _add_cell(row, 35000, "float")
     _add_cell(row, preg_start, "date")
-    _add_formula_date_cell(row, "EDATE($B$2,9)", birth)
+    _add_formula_date_cell(row, "EDATE($A$2,9)", birth)
     t.addElement(row)
     doc.spreadsheet.addElement(t)
 
@@ -262,6 +261,15 @@ def _build_one_offs(doc, preg_start: date) -> None:
     doc.spreadsheet.addElement(t)
 
 
+def _build_actuals(doc) -> None:
+    t = Table(name="Actuals")
+    hdr = TableRow()
+    for h in ["Date", "Liquidity"]:
+        _add_cell(hdr, h)
+    t.addElement(hdr)
+    doc.spreadsheet.addElement(t)
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -273,6 +281,7 @@ def create_template(output_path: Path, preg_start: date = date(2026, 4, 1)) -> N
     _build_phases(doc, preg_start)
     _build_recurring(doc, preg_start)
     _build_one_offs(doc, preg_start)
+    _build_actuals(doc)
     doc.save(str(output_path))
     print(f"Created {output_path}  (Preg_Start={preg_start})")
 

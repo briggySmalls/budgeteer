@@ -37,10 +37,10 @@ def _add_cell(row: TableRow, value: str | float | date, value_type: str = "strin
 def write_ods(
     path: Path,
     *,
-    starting_savings: float,
     phases: list[tuple[str, str, date, date]],
     recurring: list[tuple],
     one_offs: list[tuple],
+    actuals: list[tuple[date, float]] | None = None,
 ):
     """Write a complete model_inputs.ods file.
 
@@ -51,16 +51,6 @@ def write_ods(
         one_offs: list of (id, name, direction, amount, date)
     """
     doc = OpenDocumentSpreadsheet()
-
-    # Config
-    config = Table(name="Config")
-    hdr = TableRow()
-    _add_cell(hdr, "Starting_Savings")
-    config.addElement(hdr)
-    row = TableRow()
-    _add_cell(row, starting_savings, "float")
-    config.addElement(row)
-    doc.spreadsheet.addElement(config)
 
     # Phases
     phases_t = Table(name="Phases")
@@ -116,5 +106,18 @@ def write_ods(
         _add_cell(row, d, "date")
         oo_t.addElement(row)
     doc.spreadsheet.addElement(oo_t)
+
+    # Actuals
+    actuals_t = Table(name="Actuals")
+    hdr = TableRow()
+    for h in ["Date", "Liquidity"]:
+        _add_cell(hdr, h)
+    actuals_t.addElement(hdr)
+    for d, amount in actuals or []:
+        row = TableRow()
+        _add_cell(row, d, "date")
+        _add_cell(row, amount, "float")
+        actuals_t.addElement(row)
+    doc.spreadsheet.addElement(actuals_t)
 
     doc.save(str(path))

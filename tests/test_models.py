@@ -5,6 +5,7 @@ import pytest
 from budgeteer.models import (
     Direction,
     Frequency,
+    LiquidityActual,
     OneOffCashFlow,
     Phase,
     RecurringCashFlow,
@@ -91,3 +92,19 @@ class TestOneOffCashFlow:
     def test_negative_amount_raises(self):
         with pytest.raises(ValueError, match="must be non-negative"):
             OneOffCashFlow("CF5", "Bad", Direction.OUTFLOW, -100.0, date=date(2026, 1, 1))
+
+
+class TestLiquidityActual:
+    def test_valid(self):
+        a = LiquidityActual(date=date(2026, 3, 15), amount=42000.0)
+        assert a.date == date(2026, 3, 15)
+        assert a.amount == 42000.0
+
+    def test_negative_amount_allowed(self):
+        a = LiquidityActual(date=date(2026, 3, 15), amount=-500.0)
+        assert a.amount == -500.0
+
+    def test_frozen(self):
+        a = LiquidityActual(date=date(2026, 3, 15), amount=1000.0)
+        with pytest.raises(AttributeError):
+            a.amount = 2000.0  # type: ignore[misc]

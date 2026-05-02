@@ -9,6 +9,7 @@ from budgeteer.models import (
     Direction,
     EngineError,
     Frequency,
+    LiquidityActual,
     OneOffCashFlow,
     Phase,
     RecurringCashFlow,
@@ -57,10 +58,22 @@ def compute_ledger(
     timeline: list[date],
     phases: list[Phase],
     cash_flows: list[AnyCashFlow],
-    starting_savings: float,
+    actuals: list[LiquidityActual] | None = None,
 ) -> pd.DataFrame:
     rows = []
-    balance = starting_savings
+
+    if actuals:
+        latest = max(actuals, key=lambda a: a.date)
+        latest_month = latest.date.replace(day=1)
+        timeline = [m for m in timeline if m >= latest_month]
+        balance = latest.amount
+        cash_flows = [
+            cf
+            for cf in cash_flows
+            if not (isinstance(cf, OneOffCashFlow) and cf.date < latest.date)
+        ]
+    else:
+        balance = 0.0
 
     for month in timeline:
         active_phase = _find_active_phase(month, phases)
@@ -91,16 +104,16 @@ def aggregate_cashflows_in_period(
     timeline: list[date],
     phases: list[Phase],
     cash_flows: list[AnyCashFlow],
-    starting_savings: float,
     period_start: date,
     period_end: date,
+    actuals: list[LiquidityActual] | None = None,
 ) -> dict:
     if period_end < period_start:
         raise EngineError(
             f"period_end ({period_end}) must be on or after period_start ({period_start})"
         )
 
-    ledger = compute_ledger(timeline, phases, cash_flows, starting_savings)
+    ledger = compute_ledger(timeline, phases, cash_flows, actuals)
 
     start_month = period_start.replace(day=1)
     end_month = period_end.replace(day=1)

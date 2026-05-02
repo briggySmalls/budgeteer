@@ -19,6 +19,7 @@ from budgeteer.models import (
     Direction,
     EngineError,
     Frequency,
+    LiquidityActual,
     OneOffCashFlow,
     Phase,
     RecurringCashFlow,
@@ -26,13 +27,13 @@ from budgeteer.models import (
 from budgeteer.odswriter import write_ods
 
 
-def run_forecast(tmp_path, **kwargs):
+def run_forecast(tmp_path, actuals=None, **kwargs):
     """Write an ODS file from kwargs and run the full pipeline."""
     path = tmp_path / "model.ods"
-    write_ods(path, **kwargs)
-    savings, phases, flows = load_inputs(path)
+    write_ods(path, actuals=[(a.date, a.amount) for a in actuals] if actuals else None, **kwargs)
+    phases, flows, loaded_actuals = load_inputs(path)
     timeline = build_timeline(phases)
-    ledger = compute_ledger(timeline, phases, flows, savings)
+    ledger = compute_ledger(timeline, phases, flows, loaded_actuals or None)
     agg = aggregate_by_phase(ledger)
     return ledger, agg
 
@@ -44,7 +45,7 @@ class TestTemplateScenario:
         d = date
         ledger, agg = run_forecast(
             tmp_path,
-            starting_savings=50000,
+            actuals=[LiquidityActual(date=date(2026, 6, 1), amount=50000)],
             phases=[
                 ("P1", "Current Job", d(2026, 6, 1), d(2026, 11, 30)),
                 ("P2", "Career Break", d(2026, 12, 1), d(2027, 2, 28)),
@@ -107,7 +108,7 @@ class TestSinglePhaseNoFlows:
     def test_flat_balance(self, tmp_path):
         ledger, agg = run_forecast(
             tmp_path,
-            starting_savings=10000,
+            actuals=[LiquidityActual(date=date(2026, 1, 1), amount=10000)],
             phases=[("P1", "Waiting", date(2026, 1, 1), date(2026, 6, 30))],
             recurring=[],
             one_offs=[],
@@ -123,7 +124,7 @@ class TestNegativeLiquidity:
     def test_goes_negative(self, tmp_path):
         ledger, _agg = run_forecast(
             tmp_path,
-            starting_savings=1000,
+            actuals=[LiquidityActual(date=date(2026, 1, 1), amount=1000)],
             phases=[("P1", "Burn", date(2026, 1, 1), date(2026, 3, 31))],
             recurring=[("CF1", "Rent", "Outflow", 500, "Monthly", None, None)],
             one_offs=[],
@@ -138,7 +139,6 @@ class TestAnnualFrequency:
     def test_fires_in_correct_months(self, tmp_path):
         ledger, _agg = run_forecast(
             tmp_path,
-            starting_savings=0,
             phases=[("P1", "Long", date(2026, 1, 1), date(2028, 12, 31))],
             recurring=[
                 ("CF1", "Annual Fee", "Outflow", 600, "Annually", date(2026, 3, 1), None),
@@ -158,7 +158,7 @@ class TestOneOffsOnly:
     def test_one_offs_fire_correctly(self, tmp_path):
         ledger, _agg = run_forecast(
             tmp_path,
-            starting_savings=20000,
+            actuals=[LiquidityActual(date=date(2026, 1, 1), amount=20000)],
             phases=[("P1", "Setup", date(2026, 1, 1), date(2026, 4, 30))],
             recurring=[],
             one_offs=[
@@ -178,7 +178,7 @@ class TestPhaseGap:
     def test_gap_months_included(self, tmp_path):
         ledger, agg = run_forecast(
             tmp_path,
-            starting_savings=5000,
+            actuals=[LiquidityActual(date=date(2026, 1, 1), amount=5000)],
             phases=[
                 ("P1", "Before", date(2026, 1, 1), date(2026, 2, 28)),
                 ("P2", "After", date(2026, 4, 1), date(2026, 5, 31)),
@@ -230,7 +230,6 @@ class TestAggregateCashflowsInPeriod:
             timeline,
             phases,
             cash_flows,
-            10000.0,
             date(2026, 1, 1),
             date(2026, 6, 30),
         )
@@ -248,7 +247,6 @@ class TestAggregateCashflowsInPeriod:
             timeline,
             phases,
             cash_flows,
-            10000.0,
             date(2026, 3, 1),
             date(2026, 3, 31),
         )
@@ -264,22 +262,20 @@ class TestAggregateCashflowsInPeriod:
             timeline,
             phases,
             [],
-            5000.0,
             date(2026, 1, 1),
             date(2026, 3, 31),
         )
         assert result["items"] == []
-        assert result["starting_liquidity"] == 5000.0
-        assert result["ending_liquidity"] == 5000.0
+        assert result["starting_liquidity"] == 0.0
+        assert result["ending_liquidity"] == 0.0
 
     def test_starting_and_ending_liquidity_match_ledger(self):
         timeline, phases, cash_flows = self._setup()
-        ledger = compute_ledger(timeline, phases, cash_flows, 10000.0)
+        ledger = compute_ledger(timeline, phases, cash_flows)
         result = aggregate_cashflows_in_period(
             timeline,
             phases,
             cash_flows,
-            10000.0,
             date(2026, 3, 1),
             date(2026, 3, 1),
         )
@@ -293,7 +289,6 @@ class TestAggregateCashflowsInPeriod:
             timeline,
             phases,
             cash_flows,
-            10000.0,
             date(2026, 1, 1),
             date(2026, 6, 30),
         )
@@ -310,7 +305,6 @@ class TestAggregateCashflowsInPeriod:
                 timeline,
                 phases,
                 cash_flows,
-                10000.0,
                 date(2030, 1, 1),
                 date(2030, 6, 30),
             )
@@ -322,7 +316,75 @@ class TestAggregateCashflowsInPeriod:
                 timeline,
                 phases,
                 cash_flows,
-                10000.0,
                 date(2026, 6, 1),
                 date(2026, 1, 1),
             )
+
+
+class TestActuals:
+    """compute_ledger correctly re-anchors from the latest actual reading."""
+
+    def _base_kwargs(self):
+        return dict(
+            phases=[("P1", "Work", date(2026, 1, 1), date(2026, 6, 30))],
+            recurring=[("CF1", "Rent", "Outflow", 1000, "Monthly", None, None)],
+            one_offs=[],
+        )
+
+    def test_no_actuals_starts_from_zero(self, tmp_path):
+        ledger, _ = run_forecast(tmp_path, actuals=[], **self._base_kwargs())
+        assert len(ledger) == 6
+        assert ledger.iloc[0]["starting_liquidity"] == 0.0
+
+    def test_latest_actual_re_anchors_balance(self, tmp_path):
+        actuals = [LiquidityActual(date=date(2026, 3, 15), amount=25000.0)]
+        ledger, _ = run_forecast(tmp_path, actuals=actuals, **self._base_kwargs())
+        # Timeline trimmed to March onward (4 months: Mar-Jun)
+        assert len(ledger) == 4
+        assert ledger.iloc[0]["starting_liquidity"] == 25000.0
+        # Each month: -1000 rent; 25000 - 4*1000 = 21000
+        assert ledger.iloc[-1]["ending_liquidity"] == 21000.0
+
+    def test_one_off_before_latest_actual_filtered(self, tmp_path):
+        kwargs = dict(
+            phases=[("P1", "Work", date(2026, 1, 1), date(2026, 6, 30))],
+            recurring=[],
+            one_offs=[
+                ("CF1", "Old Bonus", "Inflow", 5000, date(2026, 2, 1)),
+                ("CF2", "Future Bonus", "Inflow", 3000, date(2026, 5, 1)),
+            ],
+        )
+        actuals = [LiquidityActual(date=date(2026, 3, 1), amount=8000.0)]
+        ledger, _ = run_forecast(tmp_path, actuals=actuals, **kwargs)
+        # Old Bonus (Feb) is before latest actual (Mar 1) — filtered out
+        # Future Bonus (May) is after — kept
+        assert len(ledger) == 4  # Mar-Jun
+        may = ledger[ledger["month_year"] == date(2026, 5, 1)].iloc[0]
+        assert may["total_inflow"] == 3000.0
+        total_inflow_all = ledger["total_inflow"].sum()
+        assert total_inflow_all == 3000.0  # Only the future bonus
+
+    def test_one_off_on_same_day_as_actual_kept(self, tmp_path):
+        kwargs = dict(
+            phases=[("P1", "Work", date(2026, 1, 1), date(2026, 6, 30))],
+            recurring=[],
+            one_offs=[
+                ("CF1", "Same Day", "Inflow", 500, date(2026, 3, 15)),
+            ],
+        )
+        # Actual on the 15th; a one-off also on the 15th should NOT be filtered
+        # (filter is strictly less-than)
+        actuals = [LiquidityActual(date=date(2026, 3, 15), amount=8000.0)]
+        ledger, _ = run_forecast(tmp_path, actuals=actuals, **kwargs)
+        march = ledger[ledger["month_year"] == date(2026, 3, 1)].iloc[0]
+        assert march["total_inflow"] == 500.0
+
+    def test_multiple_actuals_only_latest_anchors(self, tmp_path):
+        actuals = [
+            LiquidityActual(date=date(2026, 2, 1), amount=11000.0),
+            LiquidityActual(date=date(2026, 4, 1), amount=30000.0),
+        ]
+        ledger, _ = run_forecast(tmp_path, actuals=actuals, **self._base_kwargs())
+        # Latest is April -> timeline Apr-Jun (3 months)
+        assert len(ledger) == 3
+        assert ledger.iloc[0]["starting_liquidity"] == 30000.0

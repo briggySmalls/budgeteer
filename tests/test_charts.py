@@ -16,7 +16,7 @@ def _make_ledger():
         RecurringCashFlow("CF2", "Rent", Direction.OUTFLOW, 1500.0, Frequency.MONTHLY),
     ]
     timeline = build_timeline(phases)
-    return timeline, phases, cash_flows, compute_ledger(timeline, phases, cash_flows, 10000.0)
+    return timeline, phases, cash_flows, compute_ledger(timeline, phases, cash_flows)
 
 
 class TestCombinedMonthlyChart:
@@ -45,7 +45,6 @@ class TestPeriodWaterfallChart:
             timeline,
             phases,
             cash_flows,
-            10000.0,
             date(2026, 1, 1),
             date(2026, 6, 30),
         )
@@ -58,7 +57,6 @@ class TestPeriodWaterfallChart:
             timeline,
             phases,
             cash_flows,
-            10000.0,
             date(2026, 1, 1),
             date(2026, 6, 30),
         )
@@ -72,7 +70,6 @@ class TestPeriodWaterfallChart:
             timeline,
             phases,
             cash_flows,
-            10000.0,
             date(2026, 3, 1),
             date(2026, 3, 1),
         )
