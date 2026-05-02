@@ -61,14 +61,27 @@ def _add_actuals_overlay(fig: go.Figure, actuals: list[LiquidityActual]) -> None
         layer="below",
     )
 
-    fig.add_vline(
-        x=str(latest.date),
-        line_dash="dash",
-        line_color="rgba(0, 0, 0, 0.45)",
-        line_width=1,
-        annotation_text="Latest actual",
-        annotation_position="top right",
-        annotation_font_size=11,
+    x_val = latest.date.isoformat()
+    fig.add_shape(
+        type="line",
+        x0=x_val,
+        x1=x_val,
+        y0=0,
+        y1=1,
+        xref="x",
+        yref="paper",
+        line=dict(dash="dash", color="rgba(0, 0, 0, 0.45)", width=1),
+    )
+    fig.add_annotation(
+        x=x_val,
+        y=1,
+        xref="x",
+        yref="paper",
+        text="Latest actual",
+        showarrow=False,
+        font=dict(size=11),
+        xanchor="right",
+        yanchor="top",
     )
 
     fig.add_trace(
