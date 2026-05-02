@@ -27,8 +27,8 @@ from budgeteer.odswriter import _add_cell, _add_formula_date_cell
 # ---------------------------------------------------------------------------
 # Spreadsheet cell references for the two anchor dates on the Config sheet
 # ---------------------------------------------------------------------------
-PREG_START = "Config.$B$2"
-BIRTH_DATE = "Config.$C$2"
+PREG_START = "[.Config.$B$2]"
+BIRTH_DATE = "[.Config.$C$2]"
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ def _build_config(doc, preg_start: date) -> None:
         _add_cell(hdr, h)
     t.addElement(hdr)
     row = TableRow()
-    _add_cell(row, 21000, "float")
+    _add_cell(row, 35000, "float")
     _add_cell(row, preg_start, "date")
     _add_formula_date_cell(row, "EDATE($B$2,9)", birth)
     t.addElement(row)
@@ -212,7 +212,6 @@ def _build_one_offs(doc, preg_start: date) -> None:
 
     # formula=None = hardcoded date (corporate calendar, not biological)
     rows = [
-        ("CF10", "April Bonus & RSUs", "Inflow", 40000, None, date(2026, 4, 30)),
         ("CF11", "October RSUs", "Inflow", 12000, None, date(2026, 10, 31)),
         (
             "CF12",
