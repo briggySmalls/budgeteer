@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import streamlit as st
@@ -37,6 +37,17 @@ def _file_watcher():
         st.rerun()
 
 
+def _to_month_start(clicked_x: str | date, timeline: list[date]) -> date:
+    """Convert a Plotly-clicked x value (ISO string or date) to the matching timeline month."""
+    parsed = date.fromisoformat(clicked_x[:10]) if isinstance(clicked_x, str) else clicked_x
+    target = parsed.replace(day=1)
+    # Find exact match first, then nearest
+    for m in timeline:
+        if m == target:
+            return m
+    return min(timeline, key=lambda m: abs((m - target).days))
+
+
 def main():
     st.set_page_config(page_title="Budgeteer", layout="wide")
     st.title("Budgeteer — Liquidity Forecast")
@@ -44,10 +55,7 @@ def main():
     _file_watcher()
 
     if not ODS_PATH.exists():
-        st.warning(
-            f"No `{ODS_PATH}` found. Run `make template` to generate one, "
-            "or place your own file in the project root."
-        )
+        st.warning(f"No `{ODS_PATH}` found. Place a model file in the project root.")
         st.stop()
 
     mtime = _get_file_mtime()
@@ -81,21 +89,50 @@ def main():
     timeline = build_timeline(phases)
     ledger = compute_ledger(timeline, phases, cash_flows, actuals or None)
 
-    tab1, tab2, tab3 = st.tabs(["Monthly View", "Period Waterfall", "Ledger Data"])
+    # Process any pending tab switch from a chart click (must happen before st.tabs is
+    # instantiated — Streamlit forbids writing widget state after the widget is rendered).
+    if "pending_tab_switch" in st.session_state:
+        st.session_state["main_tabs"] = st.session_state.pop("pending_tab_switch")
+
+    tab1, tab2, tab3 = st.tabs(
+        ["Monthly View", "Period Waterfall", "Ledger Data"],
+        key="main_tabs",
+        on_change="rerun",
+        default="Monthly View",
+    )
 
     with tab1:
-        st.plotly_chart(
+        # Versioned key: incrementing chart_gen on each click forces Streamlit to mount
+        # a fresh widget with no retained selection, avoiding greyed traces and phantom
+        # re-fires on subsequent reruns.
+        chart_key = f"monthly_chart_{st.session_state.get('chart_gen', 0)}"
+        event = st.plotly_chart(
             combined_monthly_chart(ledger, actuals or None),
             theme="streamlit",
             use_container_width=True,
+            on_select="rerun",
+            selection_mode="points",
+            key=chart_key,
         )
-        st.caption("Click legend entries to toggle traces. Double-click to isolate.")
+        st.caption(
+            "Click any bar or marker to drill into that month's waterfall. "
+            "Click legend entries to toggle traces."
+        )
+
+        if event and event.selection.points:
+            clicked_month = _to_month_start(event.selection.points[0]["x"], timeline)
+            st.session_state["wf_mode"] = "Single month"
+            st.session_state["wf_month"] = clicked_month
+            st.session_state["pending_tab_switch"] = "Period Waterfall"
+            st.session_state["chart_gen"] = st.session_state.get("chart_gen", 0) + 1
+            st.rerun()
 
     with tab2:
         mode = st.radio(
             "Period selection",
             ["Phase", "Single month", "Custom range"],
             horizontal=True,
+            key="wf_mode",
         )
 
         timeline_start = timeline[0]
@@ -103,15 +140,20 @@ def main():
 
         if mode == "Phase":
             phase_names = [p.name for p in phases]
-            selected_name = st.selectbox("Select phase", phase_names)
+            selected_name = st.selectbox("Select phase", phase_names, key="wf_phase")
             selected_phase = next(p for p in phases if p.name == selected_name)
             period_start = selected_phase.start_date
             period_end = selected_phase.end_date
 
         elif mode == "Single month":
             month_labels = [m.strftime("%b %Y") for m in timeline]
-            selected_label = st.selectbox("Select month", month_labels)
+            preset = st.session_state.get("wf_month", timeline_start)
+            default_idx = next((i for i, m in enumerate(timeline) if m == preset), 0)
+            selected_label = st.selectbox(
+                "Select month", month_labels, index=default_idx, key="wf_month_label"
+            )
             selected_month = timeline[month_labels.index(selected_label)]
+            st.session_state["wf_month"] = selected_month
             period_start = selected_month
             period_end = selected_month
 
@@ -123,6 +165,7 @@ def main():
                     value=timeline_start,
                     min_value=timeline_start,
                     max_value=timeline_end,
+                    key="wf_range_start",
                 )
             with col2:
                 period_end = st.date_input(
@@ -130,6 +173,7 @@ def main():
                     value=timeline_end,
                     min_value=timeline_start,
                     max_value=timeline_end,
+                    key="wf_range_end",
                 )
 
         try:
