@@ -65,6 +65,7 @@ dependencies = [
     { name = "odfpy" },
     { name = "pandas" },
     { name = "plotly" },
+    { name = "python-dateutil" },
     { name = "streamlit" },
 ]
 
@@ -81,6 +82,7 @@ requires-dist = [
     { name = "odfpy", specifier = ">=1.4.1" },
     { name = "pandas", specifier = ">=3.0.2" },
     { name = "plotly", specifier = ">=6.7.0" },
+    { name = "python-dateutil", specifier = ">=2.9.0.post0" },
     { name = "streamlit", specifier = ">=1.57.0" },
 ]
 

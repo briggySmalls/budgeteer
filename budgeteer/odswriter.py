@@ -10,6 +10,17 @@ from odf.table import Table, TableCell, TableRow
 from odf.text import P
 
 
+def _add_formula_date_cell(row: TableRow, formula: str, cached: date):
+    """Add a date cell whose value is a spreadsheet formula with a cached result.
+
+    The cached value is what the Python engine reads; LibreOffice recalculates
+    it from the formula whenever the anchor dates change and the file is saved.
+    """
+    cell = TableCell(formula=f"of:={formula}", valuetype="date", datevalue=str(cached))
+    cell.addElement(P(text=str(cached)))
+    row.addElement(cell)
+
+
 def _add_cell(row: TableRow, value: str | float | date, value_type: str = "string"):
     if value_type == "date":
         cell = TableCell(valuetype="date", datevalue=str(value))

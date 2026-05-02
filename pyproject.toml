@@ -8,6 +8,7 @@ dependencies = [
     "odfpy>=1.4.1",
     "pandas>=3.0.2",
     "plotly>=6.7.0",
+    "python-dateutil>=2.9.0.post0",
     "streamlit>=1.57.0",
 ]
 
