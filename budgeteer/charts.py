@@ -36,7 +36,7 @@ def _add_phase_bands(fig: go.Figure, ledger: pd.DataFrame) -> None:
         color_idx = i % len(PHASE_COLORS)
         fig.add_vrect(
             x0=phase_months.min(),
-            x1=phase_months.max(),
+            x1=(pd.Timestamp(phase_months.max()) + pd.DateOffset(months=1)).date(),
             fillcolor=PHASE_COLORS[color_idx],
             line_width=1,
             line_color=PHASE_BORDER_COLORS[color_idx],
