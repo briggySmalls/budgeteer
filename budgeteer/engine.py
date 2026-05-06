@@ -31,8 +31,9 @@ def build_timeline(phases: list[Phase]) -> list[date]:
 
 
 def _find_active_phase(month: date, phases: list[Phase]) -> str | None:
+    month_end = month.replace(day=monthrange(month.year, month.month)[1])
     for p in phases:
-        if p.start_date <= month <= p.end_date:
+        if p.start_date <= month_end and p.end_date >= month:
             return p.name
     return None
 
