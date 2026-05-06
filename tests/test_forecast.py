@@ -6,9 +6,12 @@ runs the full pipeline, and checks phase-level totals and balances.
 
 from datetime import date
 
+import pandas as pd
 import pytest
 
 from budgeteer.engine import (
+    _ANNUAL_PERIOD_DAYS,
+    _MONTHLY_PERIOD_DAYS,
     aggregate_by_phase,
     aggregate_cashflows_in_period,
     build_timeline,
@@ -38,68 +41,85 @@ def run_forecast(tmp_path, actuals=None, **kwargs):
     return ledger, agg
 
 
+def _d(v):
+    if v is None or isinstance(v, date):
+        return v
+    return date.fromisoformat(v)
+
+
+def phase(name, start, end):
+    return (name, _d(start), _d(end))
+
+
+def _recurring(name, amount, frequency, start, end):
+    direction = "Inflow" if amount >= 0 else "Outflow"
+    return (name, direction, abs(amount), frequency, _d(start), _d(end))
+
+
+def monthly(name, amount, start=None, end=None):
+    return _recurring(name, amount, "Monthly", start, end)
+
+
+def annually(name, amount, start=None, end=None):
+    return _recurring(name, amount, "Annually", start, end)
+
+
+def one_off(name, amount, on):
+    direction = "Inflow" if amount >= 0 else "Outflow"
+    return (name, direction, abs(amount), _d(on))
+
+
+def actual(amount, on):
+    return LiquidityActual(date=_d(on), amount=amount)
+
+
 class TestTemplateScenario:
     """The default template: 3 phases, salary->break->new role."""
 
     def test_full_pipeline(self, tmp_path):
-        d = date
+        # fmt: off
         ledger, agg = run_forecast(
             tmp_path,
-            actuals=[LiquidityActual(date=date(2026, 6, 1), amount=50000)],
+            actuals=[actual(50_000, "2026-06-01")],
             phases=[
-                ("P1", "Current Job", d(2026, 6, 1), d(2026, 11, 30)),
-                ("P2", "Career Break", d(2026, 12, 1), d(2027, 2, 28)),
-                ("P3", "New Role", d(2027, 3, 1), d(2027, 11, 30)),
+                phase("Current Job",  "2026-06-01", "2026-11-30"),
+                phase("Career Break", "2026-12-01", "2027-02-28"),
+                phase("New Role",     "2027-03-01", "2027-11-30"),
             ],
             recurring=[
-                ("CF1", "Salary", "Inflow", 5000, "Monthly", d(2026, 6, 1), d(2026, 11, 30)),
-                ("CF2", "Rent", "Outflow", 1800, "Monthly", None, None),
-                ("CF3", "Groceries", "Outflow", 600, "Monthly", None, None),
-                ("CF4", "New Salary", "Inflow", 6500, "Monthly", d(2027, 3, 1), d(2027, 11, 30)),
-                ("CF5", "Insurance", "Outflow", 1200, "Annually", d(2026, 9, 1), None),
+                monthly("Salary",     +5000, "2026-06-01", "2026-11-30"),
+                monthly("Rent",       -1800),
+                monthly("Groceries",   -600),
+                monthly("New Salary", +6500, "2027-03-01", "2027-11-30"),
+                annually("Insurance", -1200, "2026-09-01"),
             ],
             one_offs=[
-                ("CF10", "Moving Costs", "Outflow", 3000, d(2026, 12, 1)),
-                ("CF11", "Signing Bonus", "Inflow", 5000, d(2027, 3, 1)),
+                one_off("Moving Costs",  -3000, "2026-12-01"),
+                one_off("Signing Bonus", +5000, "2027-03-01"),
             ],
         )
 
-        # 18 months total: Jun 2026 -> Nov 2027
-        assert len(ledger) == 18
+        assert len(ledger) == 18  # Jun 2026 -> Nov 2027
 
-        # -- Phase 1: Current Job (Jun-Nov 2026, 6 months) --
-        p1 = agg[agg["active_phase"] == "Current Job"].iloc[0]
-        assert p1["months"] == 6
-        assert p1["starting_liquidity"] == 50000
-        # Monthly: +5000 salary, -1800 rent, -600 groceries = +2600/mo
-        # Sep also has -1200 insurance (annual)
-        # 6 months * 2600 = 15600, minus 1200 insurance = 14400
-        assert p1["net_flow"] == 14400
-        assert p1["ending_liquidity"] == 64400
-
-        # -- Phase 2: Career Break (Dec 2026 - Feb 2027, 3 months) --
-        p2 = agg[agg["active_phase"] == "Career Break"].iloc[0]
-        assert p2["months"] == 3
-        assert p2["starting_liquidity"] == 64400
-        # No salary, -1800 rent, -600 groceries = -2400/mo
-        # Dec also has -3000 moving costs (one-off)
-        # 3 * -2400 + -3000 = -10200
-        assert p2["net_flow"] == -10200
-        assert p2["ending_liquidity"] == 54200
-
-        # -- Phase 3: New Role (Mar-Nov 2027, 9 months) --
-        p3 = agg[agg["active_phase"] == "New Role"].iloc[0]
-        assert p3["months"] == 9
-        assert p3["starting_liquidity"] == 54200
-        # +6500 salary, -1800 rent, -600 groceries = +4100/mo
-        # Mar has +5000 signing bonus (one-off)
-        # Sep has -1200 insurance (annual)
-        # 9 * 4100 + 5000 - 1200 = 40700
-        assert p3["net_flow"] == 40700
-        assert p3["ending_liquidity"] == 94900
-
-        # Final balance
-        assert ledger.iloc[-1]["ending_liquidity"] == 94900
+        expected = pd.DataFrame([
+            {"phase": "Current Job",  "months": 6, "start": 50_000.00, "net":  14_432.85, "end": 64_432.85},  # noqa: E501
+            {"phase": "Career Break", "months": 3, "start": 64_432.85, "net": -10_096.51, "end": 54_336.34},  # noqa: E501
+            {"phase": "New Role",     "months": 9, "start": 54_336.34, "net":  40_840.66, "end": 95_177.00},  # noqa: E501
+        ])
+        # fmt: on
+        actual_summary = (
+            agg[["active_phase", "months", "starting_liquidity", "net_flow", "ending_liquidity"]]
+            .rename(
+                columns={
+                    "active_phase": "phase",
+                    "starting_liquidity": "start",
+                    "net_flow": "net",
+                    "ending_liquidity": "end",
+                }
+            )
+            .reset_index(drop=True)
+        )
+        pd.testing.assert_frame_equal(actual_summary, expected, atol=0.01)
 
 
 class TestSinglePhaseNoFlows:
@@ -109,7 +129,7 @@ class TestSinglePhaseNoFlows:
         ledger, agg = run_forecast(
             tmp_path,
             actuals=[LiquidityActual(date=date(2026, 1, 1), amount=10000)],
-            phases=[("P1", "Waiting", date(2026, 1, 1), date(2026, 6, 30))],
+            phases=[("Waiting", date(2026, 1, 1), date(2026, 6, 30))],
             recurring=[],
             one_offs=[],
         )
@@ -125,12 +145,13 @@ class TestNegativeLiquidity:
         ledger, _agg = run_forecast(
             tmp_path,
             actuals=[LiquidityActual(date=date(2026, 1, 1), amount=1000)],
-            phases=[("P1", "Burn", date(2026, 1, 1), date(2026, 3, 31))],
-            recurring=[("CF1", "Rent", "Outflow", 500, "Monthly", None, None)],
+            phases=[("Burn", date(2026, 1, 1), date(2026, 3, 31))],
+            recurring=[("Rent", "Outflow", 500, "Monthly", None, None)],
             one_offs=[],
         )
-        # 1000 - 500*3 = -500
-        assert ledger.iloc[-1]["ending_liquidity"] == -500
+        # Jan-Mar 2026 = 31+28+31 = 90 days of rent
+        expected = 1000 - 500 * 90 / _MONTHLY_PERIOD_DAYS
+        assert ledger.iloc[-1]["ending_liquidity"] == pytest.approx(expected)
 
 
 class TestAnnualFrequency:
@@ -139,9 +160,9 @@ class TestAnnualFrequency:
     def test_fires_in_correct_months(self, tmp_path):
         ledger, _agg = run_forecast(
             tmp_path,
-            phases=[("P1", "Long", date(2026, 1, 1), date(2028, 12, 31))],
+            phases=[("Long", date(2026, 1, 1), date(2028, 12, 31))],
             recurring=[
-                ("CF1", "Annual Fee", "Outflow", 600, "Annually", date(2026, 3, 1), None),
+                ("Annual Fee", "Outflow", 600, "Annually", date(2026, 3, 1), None),
             ],
             one_offs=[],
         )
@@ -149,7 +170,10 @@ class TestAnnualFrequency:
         months_with_outflow = ledger[ledger["total_outflow"] > 0]
         assert len(months_with_outflow) == 3
         assert all(d.month == 3 for d in months_with_outflow["month_year"])
-        assert ledger.iloc[-1]["ending_liquidity"] == -1800
+        # Anniversary windows: Mar 2026 -> 365 days, Mar 2027 -> 366 (covers leap Feb 2028),
+        # Mar 2028 -> 365.
+        expected = -600 * (365 + 366 + 365) / _ANNUAL_PERIOD_DAYS
+        assert ledger.iloc[-1]["ending_liquidity"] == pytest.approx(expected)
 
 
 class TestOneOffsOnly:
@@ -159,11 +183,11 @@ class TestOneOffsOnly:
         ledger, _agg = run_forecast(
             tmp_path,
             actuals=[LiquidityActual(date=date(2026, 1, 1), amount=20000)],
-            phases=[("P1", "Setup", date(2026, 1, 1), date(2026, 4, 30))],
+            phases=[("Setup", date(2026, 1, 1), date(2026, 4, 30))],
             recurring=[],
             one_offs=[
-                ("CF1", "Deposit", "Outflow", 5000, date(2026, 1, 15)),
-                ("CF2", "Refund", "Inflow", 2000, date(2026, 3, 10)),
+                ("Deposit", "Outflow", 5000, date(2026, 1, 15)),
+                ("Refund", "Inflow", 2000, date(2026, 3, 10)),
             ],
         )
         assert ledger.iloc[0]["ending_liquidity"] == 15000  # Jan: -5000
@@ -180,19 +204,20 @@ class TestPhaseGap:
             tmp_path,
             actuals=[LiquidityActual(date=date(2026, 1, 1), amount=5000)],
             phases=[
-                ("P1", "Before", date(2026, 1, 1), date(2026, 2, 28)),
-                ("P2", "After", date(2026, 4, 1), date(2026, 5, 31)),
+                ("Before", date(2026, 1, 1), date(2026, 2, 28)),
+                ("After", date(2026, 4, 1), date(2026, 5, 31)),
             ],
-            recurring=[("CF1", "Rent", "Outflow", 1000, "Monthly", None, None)],
+            recurring=[("Rent", "Outflow", 1000, "Monthly", None, None)],
             one_offs=[],
         )
-        # 5 months total (Jan-May), -1000 each
+        # 5 months Jan-May = 31+28+31+30+31 = 151 days
         assert len(ledger) == 5
-        assert ledger.iloc[-1]["ending_liquidity"] == 0
+        expected_final = 5000 - 1000 * 151 / _MONTHLY_PERIOD_DAYS
+        assert ledger.iloc[-1]["ending_liquidity"] == pytest.approx(expected_final)
 
-        # Gap month (March) still has the outflow
+        # Gap month (March) still has the outflow (31-day month)
         march = ledger[ledger["month_year"] == date(2026, 3, 1)].iloc[0]
-        assert march["total_outflow"] == 1000
+        assert march["total_outflow"] == pytest.approx(1000 * 31 / _MONTHLY_PERIOD_DAYS)
 
         # Aggregation only covers phased months
         assert len(agg) == 2
@@ -205,12 +230,11 @@ class TestAggregateCashflowsInPeriod:
 
     def _setup(self):
         phases = [
-            Phase("P1", "Working", date(2026, 1, 1), date(2026, 6, 30)),
-            Phase("P2", "Break", date(2026, 7, 1), date(2026, 12, 31)),
+            Phase("Working", date(2026, 1, 1), date(2026, 6, 30)),
+            Phase("Break", date(2026, 7, 1), date(2026, 12, 31)),
         ]
         cash_flows = [
             RecurringCashFlow(
-                "CF1",
                 "Salary",
                 Direction.INFLOW,
                 5000.0,
@@ -218,8 +242,8 @@ class TestAggregateCashflowsInPeriod:
                 start_date=date(2026, 1, 1),
                 end_date=date(2026, 6, 30),
             ),
-            RecurringCashFlow("CF2", "Rent", Direction.OUTFLOW, 1200.0, Frequency.MONTHLY),
-            OneOffCashFlow("CF3", "Bonus", Direction.INFLOW, 3000.0, date=date(2026, 3, 1)),
+            RecurringCashFlow("Rent", Direction.OUTFLOW, 1200.0, Frequency.MONTHLY),
+            OneOffCashFlow("Bonus", Direction.INFLOW, 3000.0, date=date(2026, 3, 1)),
         ]
         timeline = build_timeline(phases)
         return timeline, phases, cash_flows
@@ -234,11 +258,10 @@ class TestAggregateCashflowsInPeriod:
             date(2026, 6, 30),
         )
         items_by_name = {it["name"]: it for it in result["items"]}
-        # Salary: 5000 * 6 months = 30000
-        assert items_by_name["Salary"]["amount"] == 30000
-        # Rent: 1200 * 6 months = 7200 (active all year, but only 6 months in period)
-        assert items_by_name["Rent"]["amount"] == 7200
-        # Bonus fires once in Mar
+        # Jan-Jun 2026 = 31+28+31+30+31+30 = 181 days
+        assert items_by_name["Salary"]["amount"] == pytest.approx(5000 * 181 / _MONTHLY_PERIOD_DAYS)
+        assert items_by_name["Rent"]["amount"] == pytest.approx(1200 * 181 / _MONTHLY_PERIOD_DAYS)
+        # Bonus is a one-off; not pro-rated
         assert items_by_name["Bonus"]["amount"] == 3000
 
     def test_single_month(self):
@@ -251,12 +274,13 @@ class TestAggregateCashflowsInPeriod:
             date(2026, 3, 31),
         )
         items_by_name = {it["name"]: it for it in result["items"]}
-        assert items_by_name["Salary"]["amount"] == 5000
-        assert items_by_name["Rent"]["amount"] == 1200
+        # March = 31 days
+        assert items_by_name["Salary"]["amount"] == pytest.approx(5000 * 31 / _MONTHLY_PERIOD_DAYS)
+        assert items_by_name["Rent"]["amount"] == pytest.approx(1200 * 31 / _MONTHLY_PERIOD_DAYS)
         assert items_by_name["Bonus"]["amount"] == 3000
 
     def test_period_with_no_cashflows_returns_empty_items(self):
-        phases = [Phase("P1", "Quiet", date(2026, 1, 1), date(2026, 3, 31))]
+        phases = [Phase("Quiet", date(2026, 1, 1), date(2026, 3, 31))]
         timeline = build_timeline(phases)
         result = aggregate_cashflows_in_period(
             timeline,
@@ -326,8 +350,8 @@ class TestActuals:
 
     def _base_kwargs(self):
         return dict(
-            phases=[("P1", "Work", date(2026, 1, 1), date(2026, 6, 30))],
-            recurring=[("CF1", "Rent", "Outflow", 1000, "Monthly", None, None)],
+            phases=[("Work", date(2026, 1, 1), date(2026, 6, 30))],
+            recurring=[("Rent", "Outflow", 1000, "Monthly", None, None)],
             one_offs=[],
         )
 
@@ -339,19 +363,19 @@ class TestActuals:
     def test_latest_actual_re_anchors_balance(self, tmp_path):
         actuals = [LiquidityActual(date=date(2026, 3, 15), amount=25000.0)]
         ledger, _ = run_forecast(tmp_path, actuals=actuals, **self._base_kwargs())
-        # Timeline trimmed to March onward (4 months: Mar-Jun)
+        # Timeline trimmed to March onward (4 months: Mar-Jun = 31+30+31+30 = 122 days)
         assert len(ledger) == 4
         assert ledger.iloc[0]["starting_liquidity"] == 25000.0
-        # Each month: -1000 rent; 25000 - 4*1000 = 21000
-        assert ledger.iloc[-1]["ending_liquidity"] == 21000.0
+        expected = 25000 - 1000 * 122 / _MONTHLY_PERIOD_DAYS
+        assert ledger.iloc[-1]["ending_liquidity"] == pytest.approx(expected)
 
     def test_one_off_before_latest_actual_filtered(self, tmp_path):
         kwargs = dict(
-            phases=[("P1", "Work", date(2026, 1, 1), date(2026, 6, 30))],
+            phases=[("Work", date(2026, 1, 1), date(2026, 6, 30))],
             recurring=[],
             one_offs=[
-                ("CF1", "Old Bonus", "Inflow", 5000, date(2026, 2, 1)),
-                ("CF2", "Future Bonus", "Inflow", 3000, date(2026, 5, 1)),
+                ("Old Bonus", "Inflow", 5000, date(2026, 2, 1)),
+                ("Future Bonus", "Inflow", 3000, date(2026, 5, 1)),
             ],
         )
         actuals = [LiquidityActual(date=date(2026, 3, 1), amount=8000.0)]
@@ -366,10 +390,10 @@ class TestActuals:
 
     def test_one_off_on_same_day_as_actual_kept(self, tmp_path):
         kwargs = dict(
-            phases=[("P1", "Work", date(2026, 1, 1), date(2026, 6, 30))],
+            phases=[("Work", date(2026, 1, 1), date(2026, 6, 30))],
             recurring=[],
             one_offs=[
-                ("CF1", "Same Day", "Inflow", 500, date(2026, 3, 15)),
+                ("Same Day", "Inflow", 500, date(2026, 3, 15)),
             ],
         )
         # Actual on the 15th; a one-off also on the 15th should NOT be filtered
