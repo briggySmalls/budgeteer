@@ -14,31 +14,29 @@ from budgeteer.models import (
 
 class TestPhase:
     def test_valid_phase(self):
-        p = Phase("P1", "Test Phase", date(2026, 1, 1), date(2026, 6, 30))
-        assert p.id == "P1"
+        p = Phase("Test Phase", date(2026, 1, 1), date(2026, 6, 30))
         assert p.name == "Test Phase"
         assert p.start_date == date(2026, 1, 1)
         assert p.end_date == date(2026, 6, 30)
 
     def test_end_before_start_raises(self):
         with pytest.raises(ValueError, match="must be after start_date"):
-            Phase("P1", "Bad", date(2026, 6, 30), date(2026, 1, 1))
+            Phase("Bad", date(2026, 6, 30), date(2026, 1, 1))
 
     def test_equal_dates_raises(self):
         with pytest.raises(ValueError, match="must be after start_date"):
-            Phase("P1", "Bad", date(2026, 1, 1), date(2026, 1, 1))
+            Phase("Bad", date(2026, 1, 1), date(2026, 1, 1))
 
 
 class TestRecurringCashFlow:
     def test_valid_monthly(self):
-        cf = RecurringCashFlow("CF1", "Salary", Direction.INFLOW, 5000.0, Frequency.MONTHLY)
+        cf = RecurringCashFlow("Salary", Direction.INFLOW, 5000.0, Frequency.MONTHLY)
         assert cf.frequency == Frequency.MONTHLY
         assert cf.start_date is None
         assert cf.end_date is None
 
     def test_valid_annually_with_dates(self):
         cf = RecurringCashFlow(
-            "CF2",
             "Insurance",
             Direction.OUTFLOW,
             1200.0,
@@ -51,7 +49,6 @@ class TestRecurringCashFlow:
 
     def test_unbounded_start(self):
         cf = RecurringCashFlow(
-            "CF3",
             "Rent",
             Direction.OUTFLOW,
             1800.0,
@@ -63,12 +60,11 @@ class TestRecurringCashFlow:
 
     def test_negative_amount_raises(self):
         with pytest.raises(ValueError, match="must be non-negative"):
-            RecurringCashFlow("CF1", "Bad", Direction.INFLOW, -100.0)
+            RecurringCashFlow("Bad", Direction.INFLOW, -100.0)
 
     def test_end_before_start_raises(self):
         with pytest.raises(ValueError, match="must be after start_date"):
             RecurringCashFlow(
-                "CF1",
                 "Bad",
                 Direction.OUTFLOW,
                 100.0,
@@ -80,18 +76,16 @@ class TestRecurringCashFlow:
 
 class TestOneOffCashFlow:
     def test_valid(self):
-        cf = OneOffCashFlow(
-            "CF5", "Moving Costs", Direction.OUTFLOW, 3000.0, date=date(2026, 12, 1)
-        )
+        cf = OneOffCashFlow("Moving Costs", Direction.OUTFLOW, 3000.0, date=date(2026, 12, 1))
         assert cf.date == date(2026, 12, 1)
 
     def test_missing_date_raises(self):
         with pytest.raises(ValueError, match="date is required"):
-            OneOffCashFlow("CF5", "Bad", Direction.OUTFLOW, 3000.0)
+            OneOffCashFlow("Bad", Direction.OUTFLOW, 3000.0)
 
     def test_negative_amount_raises(self):
         with pytest.raises(ValueError, match="must be non-negative"):
-            OneOffCashFlow("CF5", "Bad", Direction.OUTFLOW, -100.0, date=date(2026, 1, 1))
+            OneOffCashFlow("Bad", Direction.OUTFLOW, -100.0, date=date(2026, 1, 1))
 
 
 class TestLiquidityActual:

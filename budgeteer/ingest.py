@@ -32,9 +32,10 @@ def load_inputs(
 
 def _read_sheet(path: Path, sheet_name: str) -> pd.DataFrame:
     try:
-        return pd.read_excel(path, sheet_name=sheet_name, engine="odf")
+        df = pd.read_excel(path, sheet_name=sheet_name, engine="odf")
     except ValueError as e:
         raise IngestionError(f"Sheet '{sheet_name}' not found in {path}") from e
+    return df.dropna(how="all")
 
 
 def _require_columns(df: pd.DataFrame, columns: list[str], sheet_name: str) -> None:
@@ -69,7 +70,7 @@ def _parse_frequency(val: str, item_name: str) -> Frequency:
 
 def _read_phases(path: Path) -> list[Phase]:
     df = _read_sheet(path, "Phases")
-    _require_columns(df, ["ID", "Name", "Start_Date", "End_Date"], "Phases")
+    _require_columns(df, ["Name", "Start_Date", "End_Date"], "Phases")
 
     phases = []
     for _, row in df.iterrows():
@@ -78,7 +79,7 @@ def _read_phases(path: Path) -> list[Phase]:
         if start is None or end is None:
             raise IngestionError(f"Phase '{row['Name']}': Start_Date and End_Date are required")
         try:
-            phases.append(Phase(str(row["ID"]), str(row["Name"]), start, end))
+            phases.append(Phase(str(row["Name"]), start, end))
         except ValueError as e:
             raise IngestionError(str(e)) from e
 
@@ -101,7 +102,7 @@ def _read_recurring(path: Path) -> list[RecurringCashFlow]:
     df = _read_sheet(path, "Recurring_Cash_Flows")
     _require_columns(
         df,
-        ["ID", "Name", "Direction", "Amount", "Frequency", "Start_Date", "End_Date"],
+        ["Name", "Direction", "Amount", "Frequency", "Start_Date", "End_Date"],
         "Recurring_Cash_Flows",
     )
 
@@ -117,7 +118,6 @@ def _read_recurring(path: Path) -> list[RecurringCashFlow]:
         try:
             flows.append(
                 RecurringCashFlow(
-                    id=str(row["ID"]),
                     name=name,
                     direction=direction,
                     amount=amount,
@@ -155,7 +155,7 @@ def _read_one_offs(path: Path) -> list[OneOffCashFlow]:
     df = _read_sheet(path, "One_Off_Cash_Flows")
     _require_columns(
         df,
-        ["ID", "Name", "Direction", "Amount", "Date"],
+        ["Name", "Direction", "Amount", "Date"],
         "One_Off_Cash_Flows",
     )
 
@@ -172,7 +172,6 @@ def _read_one_offs(path: Path) -> list[OneOffCashFlow]:
         try:
             flows.append(
                 OneOffCashFlow(
-                    id=str(row["ID"]),
                     name=name,
                     direction=direction,
                     amount=amount,

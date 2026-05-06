@@ -29,7 +29,6 @@ class EngineError(BudgeteerError):
 
 @dataclass(frozen=True)
 class Phase:
-    id: str
     name: str
     start_date: date
     end_date: date
@@ -44,7 +43,6 @@ class Phase:
 
 @dataclass(frozen=True)
 class CashFlow:
-    id: str
     name: str
     direction: Direction
     amount: float

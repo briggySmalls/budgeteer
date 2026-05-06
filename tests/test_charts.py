@@ -10,10 +10,10 @@ from budgeteer.models import Direction, Frequency, Phase, RecurringCashFlow
 
 
 def _make_ledger():
-    phases = [Phase("P1", "Working", date(2026, 1, 1), date(2026, 6, 30))]
+    phases = [Phase("Working", date(2026, 1, 1), date(2026, 6, 30))]
     cash_flows = [
-        RecurringCashFlow("CF1", "Salary", Direction.INFLOW, 5000.0, Frequency.MONTHLY),
-        RecurringCashFlow("CF2", "Rent", Direction.OUTFLOW, 1500.0, Frequency.MONTHLY),
+        RecurringCashFlow("Salary", Direction.INFLOW, 5000.0, Frequency.MONTHLY),
+        RecurringCashFlow("Rent", Direction.OUTFLOW, 1500.0, Frequency.MONTHLY),
     ]
     timeline = build_timeline(phases)
     return timeline, phases, cash_flows, compute_ledger(timeline, phases, cash_flows)

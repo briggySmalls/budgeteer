@@ -26,30 +26,21 @@ def _add_cell(row: TableRow, value: str | float | date, value_type: str = "strin
 def write_ods(
     path: Path,
     *,
-    phases: list[tuple[str, str, date, date]],
+    phases: list[tuple[str, date, date]],
     recurring: list[tuple],
     one_offs: list[tuple],
     actuals: list[tuple[date, float]] | None = None,
 ):
-    """Write a complete model_inputs.ods file.
-
-    Args:
-        phases: list of (id, name, start_date, end_date)
-        recurring: list of (id, name, direction, amount, frequency, start, end)
-                   where start/end can be None
-        one_offs: list of (id, name, direction, amount, date)
-    """
     doc = OpenDocumentSpreadsheet()
 
     # Phases
     phases_t = Table(name="Phases")
     hdr = TableRow()
-    for h in ["ID", "Name", "Start_Date", "End_Date"]:
+    for h in ["Name", "Start_Date", "End_Date"]:
         _add_cell(hdr, h)
     phases_t.addElement(hdr)
-    for pid, name, start, end in phases:
+    for name, start, end in phases:
         row = TableRow()
-        _add_cell(row, pid)
         _add_cell(row, name)
         _add_cell(row, start, "date")
         _add_cell(row, end, "date")
@@ -59,12 +50,11 @@ def write_ods(
     # Recurring_Cash_Flows
     rec_t = Table(name="Recurring_Cash_Flows")
     hdr = TableRow()
-    for h in ["ID", "Name", "Direction", "Amount", "Frequency", "Start_Date", "End_Date"]:
+    for h in ["Name", "Direction", "Amount", "Frequency", "Start_Date", "End_Date"]:
         _add_cell(hdr, h)
     rec_t.addElement(hdr)
-    for fid, name, direction, amount, freq, start, end in recurring:
+    for name, direction, amount, freq, start, end in recurring:
         row = TableRow()
-        _add_cell(row, fid)
         _add_cell(row, name)
         _add_cell(row, direction)
         _add_cell(row, amount, "float")
@@ -83,12 +73,11 @@ def write_ods(
     # One_Off_Cash_Flows
     oo_t = Table(name="One_Off_Cash_Flows")
     hdr = TableRow()
-    for h in ["ID", "Name", "Direction", "Amount", "Date"]:
+    for h in ["Name", "Direction", "Amount", "Date"]:
         _add_cell(hdr, h)
     oo_t.addElement(hdr)
-    for fid, name, direction, amount, d in one_offs:
+    for name, direction, amount, d in one_offs:
         row = TableRow()
-        _add_cell(row, fid)
         _add_cell(row, name)
         _add_cell(row, direction)
         _add_cell(row, amount, "float")
