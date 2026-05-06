@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import date
+from calendar import monthrange
+from datetime import date, timedelta
 
 import pandas as pd
 
@@ -12,8 +13,10 @@ from budgeteer.models import (
     LiquidityActual,
     OneOffCashFlow,
     Phase,
-    RecurringCashFlow,
 )
+
+_MONTHLY_PERIOD_DAYS = 365.25 / 12
+_ANNUAL_PERIOD_DAYS = 365.25
 
 
 def build_timeline(phases: list[Phase]) -> list[date]:
@@ -34,24 +37,42 @@ def _find_active_phase(month: date, phases: list[Phase]) -> str | None:
     return None
 
 
-def _is_active(cf: AnyCashFlow, month: date) -> bool:
+def _interval_overlap_days(
+    flow_start: date | None,
+    flow_end: date | None,
+    window_start: date,
+    window_end: date,
+) -> int:
+    a = flow_start if flow_start is not None else window_start
+    b = flow_end if flow_end is not None else window_end
+    overlap_start = max(a, window_start)
+    overlap_end = min(b, window_end)
+    return max(0, (overlap_end - overlap_start).days + 1)
+
+
+def _anchor_date(year: int, month: int, day: int) -> date:
+    last = monthrange(year, month)[1]
+    return date(year, month, min(day, last))
+
+
+def _active_fraction(cf: AnyCashFlow, month: date) -> float:
     if isinstance(cf, OneOffCashFlow):
-        return month.year == cf.date.year and month.month == cf.date.month
+        return 1.0 if (month.year, month.month) == (cf.date.year, cf.date.month) else 0.0
 
-    if isinstance(cf, RecurringCashFlow):
-        if cf.start_date is not None and month < cf.start_date.replace(day=1):
-            return False
-        if cf.end_date is not None and month > cf.end_date.replace(day=1):
-            return False
+    if cf.frequency == Frequency.MONTHLY:
+        month_start = month
+        month_end = month.replace(day=monthrange(month.year, month.month)[1])
+        days = _interval_overlap_days(cf.start_date, cf.end_date, month_start, month_end)
+        return days / _MONTHLY_PERIOD_DAYS
 
-        if cf.frequency == Frequency.ANNUALLY:
-            if cf.start_date is None:
-                return month.month == 1
-            return month.month == cf.start_date.month
-
-        return True
-
-    return False  # pragma: no cover
+    anchor_m = cf.start_date.month if cf.start_date else 1
+    anchor_d = cf.start_date.day if cf.start_date else 1
+    if month.month != anchor_m:
+        return 0.0
+    window_start = _anchor_date(month.year, anchor_m, anchor_d)
+    window_end = _anchor_date(month.year + 1, anchor_m, anchor_d) - timedelta(days=1)
+    days = _interval_overlap_days(cf.start_date, cf.end_date, window_start, window_end)
+    return days / _ANNUAL_PERIOD_DAYS
 
 
 def compute_ledger(
@@ -77,10 +98,14 @@ def compute_ledger(
 
     for month in timeline:
         active_phase = _find_active_phase(month, phases)
-        active_cfs = [cf for cf in cash_flows if _is_active(cf, month)]
+        weighted = [(cf, _active_fraction(cf, month)) for cf in cash_flows]
 
-        total_inflow = sum(cf.amount for cf in active_cfs if cf.direction == Direction.INFLOW)
-        total_outflow = sum(cf.amount for cf in active_cfs if cf.direction == Direction.OUTFLOW)
+        total_inflow = sum(
+            cf.amount * f for cf, f in weighted if f > 0 and cf.direction == Direction.INFLOW
+        )
+        total_outflow = sum(
+            cf.amount * f for cf, f in weighted if f > 0 and cf.direction == Direction.OUTFLOW
+        )
         net_flow = total_inflow - total_outflow
         ending = balance + net_flow
 
@@ -130,7 +155,7 @@ def aggregate_cashflows_in_period(
     months = [m for m in timeline if start_month <= m <= end_month]
     totals: dict[str, dict] = {}
     for cf in cash_flows:
-        amount = sum(cf.amount for m in months if _is_active(cf, m))
+        amount = sum(cf.amount * _active_fraction(cf, m) for m in months)
         if amount == 0:
             continue
         key = cf.name
