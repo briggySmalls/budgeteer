@@ -31,11 +31,11 @@ class TestCombinedMonthlyChart:
         data_traces = [t for t in fig.data if isinstance(t, go.Bar | go.Scatter)]
         assert len(data_traces) == 2
 
-    def test_has_secondary_yaxis(self):
+    def test_traces_share_single_yaxis(self):
         _, _, _, ledger = _make_ledger()
         fig = combined_monthly_chart(ledger)
-        liquidity_trace = next(t for t in fig.data if isinstance(t, go.Scatter))
-        assert liquidity_trace.yaxis == "y2"
+        yaxes = {t.yaxis for t in fig.data if hasattr(t, "yaxis")}
+        assert yaxes <= {None, "y"}
 
 
 class TestPeriodWaterfallChart:
