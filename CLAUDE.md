@@ -52,9 +52,43 @@ The user edits `model_inputs.ods` in LibreOffice; the app watches the file's mti
 
 `model_inputs.ods` is a hand-maintained file edited in LibreOffice. It may use cross-sheet formulas (e.g. dates anchored on a `Config.Preg_Start` cell so cash-flow dates auto-update when the anchor shifts) — those formulas are authored natively in LibreOffice, not emitted from Python. `pandas.read_excel(engine="odf")` reads **cached formula values**, so the engine is unaware of the formula layer.
 
-When the data model changes (new sheet, renamed column, etc.), migrate the file with a one-off Python script using `odfpy` rather than regenerating from scratch — preserves user-authored formulas and data.
-
 `budgeteer/odswriter.py` exposes `write_ods(...)` used **only by tests** to write static-value ODS files into a `tmp_path`. It does not emit formulas.
+
+### ODS migrations
+
+When the data model or data content needs to change, write a one-off script in `scripts/` using the ETL framework in `budgeteer/ods_etl.py`. Never regenerate the file from scratch — that destroys LibreOffice-authored formulas.
+
+**Template:**
+
+```python
+from pathlib import Path
+from budgeteer.ods_etl import (
+    run_migration, get_sheet, add_sheet,
+    append_row, remove_rows,
+    str_cell, float_cell, date_cell, formula_cell,
+)
+
+def transform(doc):
+    sheet = get_sheet(doc, "One_Off_Cash_Flows")
+    remove_rows(sheet, lambda cells: "Old Entry" in cells[0])
+    append_row(sheet,
+        str_cell("New Entry"),
+        str_cell("Inflow"),
+        formula_cell("=172*$Variables.$B$2*$Variables.$B$3", 4291.77),
+        date_cell(date(2026, 7, 1)),
+    )
+
+if __name__ == "__main__":
+    run_migration(Path("model_inputs.ods"), transform)
+```
+
+`run_migration` handles backup, load, and a clean save that avoids the pitfalls below. See `scripts/migrate_add_rsus.py` for a full worked example.
+
+**Known pitfalls (all handled by `run_migration`):**
+
+- **Blank-row explosion** — LibreOffice stores ~1 million trailing blank rows as a single compact XML element. Appending rows via odfpy places them *after* this block; LibreOffice then refuses to open the file due to the row count. `run_migration` strips blank rows from `content.xml` after saving.
+- **Formula syntax** — use `$SheetName.$Col$Row` for cross-sheet references (e.g. `$Variables.$B$2`). The `[.Sheet.$Col$Row]` form triggers LibreOffice `Err:508`. `formula_cell` takes a leading `=` just like the LibreOffice formula bar and emits the correct `of:=` ODF prefix internally.
+- **Namespace prefixes** — Python's `ElementTree` re-labels ODF namespace prefixes (`table:` → `ns4:` etc.) unless prefixes are registered before parsing. `run_migration` handles this.
 
 ### Tests
 
