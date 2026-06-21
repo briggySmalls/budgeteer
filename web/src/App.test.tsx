@@ -10,9 +10,10 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: /Budgeteer/i })).toBeInTheDocument();
   });
 
-  it("prompts for an ODS upload before any data is loaded", () => {
+  it("offers both Google Sheets and ODS upload before any data is loaded", () => {
     render(<App />);
-    expect(screen.getByText(/Upload your/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Connect Google Sheets/i })).toBeInTheDocument();
+    expect(screen.getByText(/Upload a/i)).toBeInTheDocument();
     const input = document.querySelector('input[type="file"]');
     expect(input).toHaveAttribute("accept", ".ods");
   });
