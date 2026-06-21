@@ -3,13 +3,14 @@
 Personal liquidity forecasting app. Define phases and cash flows in a LibreOffice
 spreadsheet; the app computes a monthly ledger and renders interactive Plotly charts.
 
-It is a **100% client-side React + TypeScript app** (in `web/`). You upload your
-`model_inputs.ods` in the browser; nothing is sent to a server. The forecast engine,
-spreadsheet parsing and charts all run in the browser.
+It is a **100% client-side React + TypeScript app** (in `web/`). Nothing is sent to a
+server you run — the forecast engine, spreadsheet parsing and charts all run in the
+browser. Two data sources are supported behind a common `DataSource` seam:
 
-> **Phase 2 (planned):** read the model directly from Google Sheets instead of an
-> uploaded file, behind the existing `DataSource` seam — removing the need to carry the
-> `.ods` between devices.
+- **Google Sheets** (recommended) — sign in with Google and read the model straight from
+  a Sheet, so there is no file to carry between devices. Reads run as the signed-in user,
+  so the Sheet's own sharing is the access control.
+- **ODS upload** (fallback / offline) — upload a `model_inputs.ods` file.
 
 ## Quick start
 
@@ -41,6 +42,36 @@ re-implemented.
 Any other sheets (e.g. `Variables` for shared constants) are ignored by the parser and
 can be used freely for LibreOffice formulas.
 
+## Google Sheets setup (one-time)
+
+The Sheets integration needs a Google OAuth client and your model in a Sheet.
+
+**1. Create an OAuth client**
+
+- In the [Google Cloud console](https://console.cloud.google.com/), create a project and
+  enable the **Google Sheets API** and **Google Drive API**.
+- Create an OAuth **client ID** of type *Web application*.
+- Add **Authorized JavaScript origins**: `http://localhost:5173` (dev) and your deployed
+  origin (e.g. `https://briggysmalls.github.io`).
+- Copy `web/.env.example` to `web/.env.local` and set `VITE_GOOGLE_CLIENT_ID`. For the
+  GitHub Pages deploy, set a repo secret `VITE_GOOGLE_CLIENT_ID` (the build reads it).
+  (OAuth client IDs are public — they ship in the bundle — so this is not a secret in the
+  security sense; the repo secret is just how the value reaches the build.)
+
+**2. Put your model in a Sheet**
+
+- Upload `model_inputs.ods` to Google Drive and open it with Google Sheets (File → Import,
+  or "Open with → Google Sheets"). Keep the same tab names, including `Variables`.
+- Check the formulas converted: LibreOffice `$Variables.$B$2` becomes `Variables!$B$2`;
+  `EDATE`/relative-cell arithmetic and the RSU cell references should survive — verify a
+  few. Set the spreadsheet locale/number format so dates are unambiguous.
+- The Sheet is private to you by default; that sharing is the app's access control.
+
+**3. Verify parity**
+
+Open the Sheet in the app and confirm the ledger matches the same model uploaded as
+`.ods` — they should agree to the penny (both run the same engine).
+
 ## Architecture
 
 Pipeline: **`.ods` upload → `DataSource` → ingest → models → engine → charts → React UI**
@@ -52,8 +83,10 @@ Pipeline: **`.ods` upload → `DataSource` → ingest → models → engine → 
   phase/period aggregates)
 - `web/src/ingest.ts` — parses raw sheet rows into models; the `DataSource` interface
   decouples parsing from storage
-- `web/src/sources/odsUpload.ts` — `OdsUploadSource` reads an uploaded `.ods` (SheetJS),
-  converting serial dates to UTC-midnight dates
+- `web/src/sources/odsUpload.ts` — `OdsUploadSource` reads an uploaded `.ods` (SheetJS)
+- `web/src/sources/googleSheets.ts` — `GoogleSheetsSource` reads via the Sheets API
+- `web/src/sources/googleAuth.ts` — Google Identity Services token flow + Drive listing
+- `web/src/sources/sheetSchema.ts` — shared serial-date conversion + date-column schema
 - `web/src/charts.ts` — Plotly figure builders
 - `web/src/App.tsx` + `web/src/components/` — upload screen and dashboard
 
