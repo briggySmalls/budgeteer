@@ -1,0 +1,8 @@
+cd web && npx lint-staged
+
+# During the Python->TS transition, also run the existing Python pre-commit
+# checks if the tool is installed. Removed once Streamlit is retired.
+cd ..
+if command -v pre-commit >/dev/null 2>&1 && [ -f .pre-commit-config.yaml ]; then
+  pre-commit run --hook-stage pre-commit || exit 1
+fi
