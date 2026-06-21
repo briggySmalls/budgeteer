@@ -49,17 +49,25 @@ The Sheets integration needs a Google OAuth client and your model in a Sheet.
 
 **1. Create OAuth client + API key**
 
-- In the [Google Cloud console](https://console.cloud.google.com/), create a project and
-  enable the **Google Sheets API**, **Google Drive API** and **Google Picker API**.
-- Create an OAuth **client ID** of type *Web application*.
-- Create an **API key** (the Picker's developer key). Restrict it to your origins and to
-  the Picker/Sheets/Drive APIs.
-- Add **Authorized JavaScript origins** to the OAuth client: `http://localhost:5173` (dev)
-  and your deployed origin (e.g. `https://briggysmalls.github.io`).
-- Copy `web/.env.example` to `web/.env.local` and set `VITE_GOOGLE_CLIENT_ID` and
-  `VITE_GOOGLE_API_KEY`. For the GitHub Pages deploy, set repo secrets with the same names
-  (the build reads them). Both values are public (they ship in the bundle); the repo
-  secrets are just how they reach the build.
+In the [Google Cloud console](https://console.cloud.google.com/), create a project and
+enable the **Google Sheets API**, **Google Drive API** and **Google Picker API**. Then:
+
+- Create an OAuth **client ID** (type *Web application*) — used for sign-in:
+  - **Authorized JavaScript origins** (origin only, no path):
+    - `http://localhost:5173` (dev)
+    - `https://briggysmalls.github.io` (deployed)
+- Create an **API key** — the Picker's developer key:
+  - **Application restrictions → Websites (HTTP referrers)** (path allowed):
+    - `http://localhost:5173/*` (dev)
+    - `https://briggysmalls.github.io/budgeteer/*` (deployed)
+  - **API restrictions**: limit to the Google Sheets, Drive and Picker APIs.
+
+Then wire the values in:
+
+- Local dev: copy `web/.env.example` to `web/.env.local` and set `VITE_GOOGLE_CLIENT_ID`
+  and `VITE_GOOGLE_API_KEY`.
+- GitHub Pages: set repo **secrets** of the same names (the build reads them). Both values
+  are public (they ship in the bundle); the secrets are just how they reach the build.
 
 **2. Put your model in a Sheet**
 
