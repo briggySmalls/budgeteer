@@ -31,6 +31,21 @@ body {
   align-items: center;
 }
 
+.connect {
+  font-size: 1rem;
+  padding: 0.6rem 1.2rem;
+  background: #636efa;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.connect:disabled {
+  background: #b9bdf0;
+  cursor: not-allowed;
+}
+
 .layout {
   display: grid;
   grid-template-columns: 220px 1fr;

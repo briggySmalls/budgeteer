@@ -20,7 +20,17 @@ function parseIso(iso: string): Date {
   return civilDate(y ?? 1970, m ?? 1, d ?? 1);
 }
 
-export function Dashboard({ inputs, onReset }: { inputs: ParsedInputs; onReset: () => void }) {
+export function Dashboard({
+  inputs,
+  onReset,
+  onRefresh,
+  onPickAnother,
+}: {
+  inputs: ParsedInputs;
+  onReset: () => void;
+  onRefresh?: () => void;
+  onPickAnother?: () => void;
+}) {
   const { phases, cashFlows, actuals } = inputs;
   const timeline = useMemo(() => buildTimeline(phases), [phases]);
   const ledger = useMemo(
@@ -91,8 +101,18 @@ export function Dashboard({ inputs, onReset }: { inputs: ParsedInputs; onReset: 
             <span className="metric-value">{formatGBP(latestActual.amount)}</span>
           </div>
         )}
+        {onRefresh && (
+          <button type="button" className="reset" onClick={onRefresh}>
+            Refresh from Sheet
+          </button>
+        )}
+        {onPickAnother && (
+          <button type="button" className="reset" onClick={onPickAnother}>
+            Choose a different sheet
+          </button>
+        )}
         <button type="button" className="reset" onClick={onReset}>
-          Load another file
+          Load another source
         </button>
       </aside>
 

@@ -5,10 +5,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 Budgeteer is a **100% client-side React + TypeScript** liquidity-forecasting app, living
-in `web/`. The user uploads a LibreOffice `model_inputs.ods` in the browser; parsing,
-the forecast engine, and Plotly charts all run client-side. There is no backend and no
-Python — an earlier Streamlit/Python implementation was ported to TypeScript and removed
-(see git history if you need the original).
+in `web/`. Parsing, the forecast engine, and Plotly charts all run client-side. There is
+no backend and no Python — an earlier Streamlit/Python implementation was ported to
+TypeScript and removed (see git history if you need the original).
+
+The model is read through a `DataSource` seam with two implementations: **Google Sheets**
+(read via the Sheets API as the signed-in user) and an **ODS upload** fallback. Both
+yield the same row shape to ingest.
 
 ## Commands
 
@@ -44,9 +47,15 @@ Pipeline: **`.ods` upload → `DataSource` → ingest → models → engine → 
 - `web/src/ingest.ts` — `parseInputs(sheets)` turns raw rows into validated models;
   the `DataSource` interface (`load(): Promise<SheetSet>`) decouples parsing from storage.
 - `web/src/sources/odsUpload.ts` — `OdsUploadSource`: reads an uploaded `.ods` with
-  SheetJS. SheetJS returns the **cached computed value** of formula cells, so the
-  LibreOffice formula layer is preserved. Date columns arrive as 1900-system serial
-  numbers and are converted to UTC-midnight dates here, keeping ingest source-agnostic.
+  SheetJS, which returns the **cached computed value** of formula cells, so the
+  LibreOffice formula layer is preserved.
+- `web/src/sources/googleSheets.ts` — `GoogleSheetsSource`: reads via the Sheets API
+  `values:batchGet` (`UNFORMATTED_VALUE` + `SERIAL_NUMBER`), given a spreadsheet id and a
+  bearer token. `googleAuth.ts` runs the Google Identity Services token flow (client id
+  from `VITE_GOOGLE_CLIENT_ID`); `googlePicker.ts` opens the native Google Picker (API key
+  from `VITE_GOOGLE_API_KEY`) for the user to choose the spreadsheet.
+- `web/src/sources/sheetSchema.ts` — shared by both sources: the date-column schema and
+  the 1900-system serial→UTC-midnight-date conversion, so ingest stays source-agnostic.
 - `web/src/charts.ts` — pure Plotly figure builders (data + layout objects), so they are
   unit-testable without a DOM. `web/src/components/PlotlyChart.tsx` renders them,
   dynamically importing plotly.js so it is code-split out of the main bundle.
@@ -60,11 +69,15 @@ may use cross-sheet formulas (e.g. dates anchored on a `Variables` cell). It is 
 app's input (uploaded at runtime) and the fixture for `web/src/sources/odsUpload.test.ts`.
 Do not regenerate it from scratch — that destroys the LibreOffice-authored formulas.
 
-### Phase 2 (planned)
+### Google Sheets integration
 
-Add a `GoogleSheetsSource` implementing `DataSource`, plus in-browser Google auth, so the
-model can be read from Google Sheets instead of an uploaded file. The engine, charts and
-UI are unchanged — only a new source behind the existing seam.
+`VITE_GOOGLE_CLIENT_ID` (OAuth Web client id) and `VITE_GOOGLE_API_KEY` (Picker developer
+key) enable the Sheets data source; when either is unset, the UI shows only the ODS-upload
+path. For the GitHub Pages deploy the values come from repo secrets of the same names,
+read at build time in `pages.yml`. OAuth scopes are `spreadsheets.readonly` + `drive.file`
+(least privilege: the app only accesses the sheet the user picks). See the README for the
+one-time Google Cloud setup and the ODS→Sheets migration. Auth tokens are held in memory
+only; the chosen spreadsheet id is persisted in `localStorage` (`storage.ts`).
 
 ## Tests
 
