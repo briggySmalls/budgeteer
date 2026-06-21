@@ -1,9 +1,0 @@
-[theme.light]
-primaryColor = "#4CAF50"
-
-[theme.dark]
-primaryColor = "#4CAF50"
-
-[server]
-runOnSave = true
-fileWatcherType = "poll"

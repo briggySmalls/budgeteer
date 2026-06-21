@@ -1,0 +1,152 @@
+:root {
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #1a1a2e;
+}
+
+body {
+  margin: 0;
+  background: #f7f7fb;
+}
+
+.app-header {
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid #e3e3ee;
+  background: #fff;
+}
+
+.app-header h1 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.upload {
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+
+.upload-label {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+}
+
+.sidebar {
+  background: #fff;
+  border: 1px solid #e3e3ee;
+  border-radius: 8px;
+  padding: 1rem;
+  height: fit-content;
+}
+
+.sidebar h2 {
+  font-size: 1rem;
+  margin-top: 0;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0.75rem;
+}
+
+.metric-label {
+  font-size: 0.75rem;
+  color: #6b6b80;
+  text-transform: uppercase;
+}
+
+.metric-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.reset {
+  margin-top: 1rem;
+  width: 100%;
+}
+
+.content {
+  background: #fff;
+  border: 1px solid #e3e3ee;
+  border-radius: 8px;
+  padding: 1rem;
+  min-width: 0;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #e3e3ee;
+}
+
+.tabs button {
+  background: none;
+  border: none;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tabs button[aria-pressed="true"] {
+  border-bottom-color: #636efa;
+  font-weight: 600;
+}
+
+.wf-mode {
+  border: 1px solid #e3e3ee;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.wf-mode label {
+  margin-right: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  max-width: 280px;
+}
+
+.range {
+  display: flex;
+  gap: 1rem;
+}
+
+.hint {
+  color: #6b6b80;
+  font-size: 0.85rem;
+}
+
+.error {
+  color: #e74c3c;
+}
+
+.ledger {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.ledger th,
+.ledger td {
+  text-align: right;
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid #eee;
+}
+
+.ledger th:first-child,
+.ledger td:first-child {
+  text-align: left;
+}

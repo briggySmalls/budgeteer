@@ -1,19 +1,16 @@
 .PHONY: run test lint format setup
 
-setup:            ## Install deps and pre-commit hooks
-	uv sync
-	uv run pre-commit install
+setup:            ## Install web deps (also wires the git hooks via husky)
+	cd web && npm install
 
-run:              ## Start the Streamlit app
-	uv run streamlit run budgeteer/app.py
+run:              ## Start the web app (client-side SPA)
+	cd web && npm run dev
 
 test:             ## Run tests with coverage
-	uv run pytest --cov
+	cd web && npm run coverage
 
-lint:             ## Run linter checks
-	uv run ruff check .
-	uv run ruff format --check .
+lint:             ## Lint + format check + typecheck + dead-code check
+	cd web && npx biome ci . && npm run typecheck && npm run knip
 
 format:           ## Auto-format and fix lint issues
-	uv run ruff format .
-	uv run ruff check --fix .
+	cd web && npm run check

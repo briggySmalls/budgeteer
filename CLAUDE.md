@@ -2,100 +2,79 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## What this is
+
+Budgeteer is a **100% client-side React + TypeScript** liquidity-forecasting app, living
+in `web/`. The user uploads a LibreOffice `model_inputs.ods` in the browser; parsing,
+the forecast engine, and Plotly charts all run client-side. There is no backend and no
+Python — an earlier Streamlit/Python implementation was ported to TypeScript and removed
+(see git history if you need the original).
+
 ## Commands
 
-All dev commands go through `uv` and are wrapped in the `Makefile`:
+All commands run from `web/` (the `Makefile` at the repo root delegates to them):
 
-- `make setup` — `uv sync` + install pre-commit hooks
-- `make run` — launch the Streamlit app (`uv run streamlit run budgeteer/app.py`)
-- `make test` — `uv run pytest --cov`
-- `make lint` — `ruff check .` + `ruff format --check .`
-- `make format` — `ruff format .` + `ruff check --fix .`
+- `make setup` / `cd web && npm install` — install deps (also wires the git hooks)
+- `make run` / `npm run dev` — Vite dev server; upload `model_inputs.ods` to use it
+- `make test` / `npm run coverage` — Vitest with coverage thresholds
+- `make lint` — `biome ci .` + `tsc --noEmit` + `knip`
+- `make format` / `npm run check` — Biome auto-fix + format
 
-Run a single test: `uv run pytest tests/test_engine.py::test_name -v`
+Run a single test: `cd web && npx vitest run src/engine.test.ts`
 
-CI (`.github/workflows/ci.yml`) runs `ruff check`, `ruff format --check`, and `pytest --cov` against `uv sync --frozen`. Pre-commit runs `ruff-format` then `ruff --fix`.
+CI (`.github/workflows/web-ci.yml`) runs Biome, tsc, Vitest+coverage, knip and the Vite
+build. `pages.yml` deploys the static build to GitHub Pages. A Husky + lint-staged
+pre-commit hook runs Biome on staged files.
 
 ## Architecture
 
-Pipeline: **`.ods` file → ingest → models → engine → charts → Streamlit**
+Pipeline: **`.ods` upload → `DataSource` → ingest → models → engine → charts → React UI**
 
-The user edits `model_inputs.ods` in LibreOffice; the app watches the file's mtime and hot-reloads on save.
+- `web/src/dates.ts` — timezone-safe "civil date" helpers. Every date is a UTC-midnight
+  `Date`; all arithmetic is in UTC so month/day boundaries never drift. `monthStartsBetween`
+  reproduces `pandas.date_range(freq="MS")`.
+- `web/src/models.ts` — `Direction`/`Frequency` enums; `Phase`, `RecurringCashFlow`,
+  `OneOffCashFlow`, `LiquidityActual` classes with construction-time validation; the
+  `BudgeteerError`/`IngestionError`/`EngineError` hierarchy. Instances are frozen.
+- `web/src/engine.ts` — pure forecast functions, no I/O: `buildTimeline`,
+  `activeFraction` (day-overlap proration; monthly = days/`MONTHLY_PERIOD_DAYS`,
+  annual fires only in the anchor month), `computeLedger` (seeds from the latest actual,
+  filtering one-offs strictly before it), `aggregateByPhase`, `aggregateCashflowsInPeriod`.
+  Cash-flow kind is discriminated with `instanceof`.
+- `web/src/ingest.ts` — `parseInputs(sheets)` turns raw rows into validated models;
+  the `DataSource` interface (`load(): Promise<SheetSet>`) decouples parsing from storage.
+- `web/src/sources/odsUpload.ts` — `OdsUploadSource`: reads an uploaded `.ods` with
+  SheetJS. SheetJS returns the **cached computed value** of formula cells, so the
+  LibreOffice formula layer is preserved. Date columns arrive as 1900-system serial
+  numbers and are converted to UTC-midnight dates here, keeping ingest source-agnostic.
+- `web/src/charts.ts` — pure Plotly figure builders (data + layout objects), so they are
+  unit-testable without a DOM. `web/src/components/PlotlyChart.tsx` renders them,
+  dynamically importing plotly.js so it is code-split out of the main bundle.
+- `web/src/App.tsx` + `web/src/components/` — upload screen and the three-tab dashboard
+  (Monthly View with click-to-drill-down, Period Waterfall, Ledger Data).
 
-### Data flow
+### The ODS file
 
-1. **`budgeteer/ingest.py`** reads four sheets from the ODS via `pd.read_excel(engine="odf")`:
-   - `Phases` — `ID, Name, Start_Date, End_Date` (must not overlap; sorted by start_date)
-   - `Recurring_Cash_Flows` — `ID, Name, Direction, Amount, Frequency, Start_Date, End_Date`
-   - `One_Off_Cash_Flows` — `ID, Name, Direction, Amount, Date`
-   - `Actuals` — `Date, Liquidity` (may be empty; sheet must exist)
+`model_inputs.ods` is hand-maintained in LibreOffice and committed at the repo root. It
+may use cross-sheet formulas (e.g. dates anchored on a `Variables` cell). It is both the
+app's input (uploaded at runtime) and the fixture for `web/src/sources/odsUpload.test.ts`.
+Do not regenerate it from scratch — that destroys the LibreOffice-authored formulas.
 
-   All ingest errors raise `IngestionError` (subclass of `BudgeteerError`) with sheet+row context.
+### Phase 2 (planned)
 
-2. **`budgeteer/models.py`** — frozen dataclasses with `__post_init__` validation:
-   - `Phase` (end > start)
-   - `CashFlow` base (amount ≥ 0) → `RecurringCashFlow` (with `Frequency` enum: `Monthly`/`Annually`) and `OneOffCashFlow`
-   - `Direction` enum: `Inflow`/`Outflow`
-   - All exceptions descend from `BudgeteerError`.
+Add a `GoogleSheetsSource` implementing `DataSource`, plus in-browser Google auth, so the
+model can be read from Google Sheets instead of an uploaded file. The engine, charts and
+UI are unchanged — only a new source behind the existing seam.
 
-3. **`budgeteer/engine.py`** — pure functions, no I/O:
-   - `build_timeline(phases)` → list of month-start dates spanning min(phase.start) to max(phase.end)
-   - `_is_active(cf, month)` decides cash-flow activation: one-offs match year+month exactly; recurring respects start/end and `Annually` fires only in the start month (or January if no start_date)
-   - `compute_ledger(...)` returns a per-month `DataFrame` with `starting_liquidity`, `total_inflow`, `total_outflow`, `net_flow`, `ending_liquidity`, `active_phase`
-   - `aggregate_by_phase(ledger)` collapses to one row per phase
+## Tests
 
-4. **`budgeteer/charts.py`** — three Plotly figures (liquidity line with phase-band overlays, net-flow bars, phase waterfall). All use £ formatting and the shared `_add_phase_bands` helper.
-
-5. **`budgeteer/app.py`** — Streamlit entry point. Hot-reload uses an `@st.fragment(run_every=2)` watcher that compares `ODS_PATH.stat().st_mtime` against session state and clears the `@st.cache_data` loader on change. `mtime` is also passed as a cache key so edits invalidate the cache. There's a `PermissionError` retry path because LibreOffice briefly locks the file on save.
-
-### ODS file lifecycle
-
-`model_inputs.ods` is a hand-maintained file edited in LibreOffice. It may use cross-sheet formulas (e.g. dates anchored on a `Config.Preg_Start` cell so cash-flow dates auto-update when the anchor shifts) — those formulas are authored natively in LibreOffice, not emitted from Python. `pandas.read_excel(engine="odf")` reads **cached formula values**, so the engine is unaware of the formula layer.
-
-`budgeteer/odswriter.py` exposes `write_ods(...)` used **only by tests** to write static-value ODS files into a `tmp_path`. It does not emit formulas.
-
-### ODS migrations
-
-When the data model or data content needs to change, write a one-off script in `scripts/` using the ETL framework in `budgeteer/ods_etl.py`. Never regenerate the file from scratch — that destroys LibreOffice-authored formulas.
-
-**Template:**
-
-```python
-from pathlib import Path
-from budgeteer.ods_etl import (
-    run_migration, get_sheet, add_sheet,
-    append_row, remove_rows,
-    str_cell, float_cell, date_cell, formula_cell,
-)
-
-def transform(doc):
-    sheet = get_sheet(doc, "One_Off_Cash_Flows")
-    remove_rows(sheet, lambda cells: "Old Entry" in cells[0])
-    append_row(sheet,
-        str_cell("New Entry"),
-        str_cell("Inflow"),
-        formula_cell("=172*$Variables.$B$2*$Variables.$B$3", 4291.77),
-        date_cell(date(2026, 7, 1)),
-    )
-
-if __name__ == "__main__":
-    run_migration(Path("model_inputs.ods"), transform)
-```
-
-`run_migration` handles backup, load, and a clean save that avoids the pitfalls below. See `scripts/migrate_add_rsus.py` for a full worked example.
-
-**Known pitfalls (all handled by `run_migration`):**
-
-- **Blank-row explosion** — LibreOffice stores ~1 million trailing blank rows as a single compact XML element. Appending rows via odfpy places them *after* this block; LibreOffice then refuses to open the file due to the row count. `run_migration` strips blank rows from `content.xml` after saving.
-- **Formula syntax** — use `$SheetName.$Col$Row` for cross-sheet references (e.g. `$Variables.$B$2`). The `[.Sheet.$Col$Row]` form triggers LibreOffice `Err:508`. `formula_cell` takes a leading `=` just like the LibreOffice formula bar and emits the correct `of:=` ODF prefix internally.
-- **Namespace prefixes** — Python's `ElementTree` re-labels ODF namespace prefixes (`table:` → `ns4:` etc.) unless prefixes are registered before parsing. `run_migration` handles this.
-
-### Tests
-
-Integration tests in `tests/test_forecast.py` call `write_ods` to produce a temp ODS, then run the full ingest → engine pipeline. Engine/model tests build dataclasses directly.
+Vitest tests live beside their modules (`*.test.ts`). They were ported from the original
+pytest suite and pin the same penny-exact expected values (e.g. the template scenario's
+phase aggregates). `odsUpload.test.ts` exercises the real `model_inputs.ods` end to end.
 
 ## Conventions
 
-- **Currency:** GBP (£) everywhere — chart formatters and Streamlit metrics hardcode `£`.
-- **Ruff config** (`pyproject.toml`): `target-version = "py311"`, `line-length = 100`, lint rules `E,F,I,N,UP,B,SIM,RUF`.
-- **Python 3.11+** (`from __future__ import annotations` is used throughout).
+- **Currency:** GBP (£) everywhere — `formatGBP` and chart formatters hardcode `£`.
+- **Tooling:** Biome (`biome.json`, lint + format), `tsc` strict (`noUncheckedIndexedAccess`,
+  etc.), knip for dead code. Two-space indent, double quotes, 100-col width.
+- **Dates:** never use raw `new Date(...)` for calendar logic — use the `dates.ts` helpers.
