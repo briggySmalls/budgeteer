@@ -19,6 +19,7 @@
     "prepare": "cd .. && husky web/.husky"
   },
   "dependencies": {
+    "plotly.js-dist-min": "^2.35.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "xlsx": "^0.18.5"

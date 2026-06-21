@@ -41,7 +41,7 @@ export interface LedgerRow {
   endingLiquidity: number;
 }
 
-export interface PhaseSummary {
+interface PhaseSummary {
   activePhase: string;
   startingLiquidity: number;
   endingLiquidity: number;
