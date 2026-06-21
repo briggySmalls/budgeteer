@@ -7,6 +7,9 @@ dist/
 build/
 .~lock.*
 ~$*
+
+# Personal model files — never commit (contains real financial data).
+*.ods
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
