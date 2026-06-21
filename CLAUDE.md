@@ -52,7 +52,8 @@ Pipeline: **`.ods` upload → `DataSource` → ingest → models → engine → 
 - `web/src/sources/googleSheets.ts` — `GoogleSheetsSource`: reads via the Sheets API
   `values:batchGet` (`UNFORMATTED_VALUE` + `SERIAL_NUMBER`), given a spreadsheet id and a
   bearer token. `googleAuth.ts` runs the Google Identity Services token flow (client id
-  from `VITE_GOOGLE_CLIENT_ID`) and lists the user's spreadsheets from Drive.
+  from `VITE_GOOGLE_CLIENT_ID`); `googlePicker.ts` opens the native Google Picker (API key
+  from `VITE_GOOGLE_API_KEY`) for the user to choose the spreadsheet.
 - `web/src/sources/sheetSchema.ts` — shared by both sources: the date-column schema and
   the 1900-system serial→UTC-midnight-date conversion, so ingest stays source-agnostic.
 - `web/src/charts.ts` — pure Plotly figure builders (data + layout objects), so they are
@@ -70,12 +71,13 @@ Do not regenerate it from scratch — that destroys the LibreOffice-authored for
 
 ### Google Sheets integration
 
-`VITE_GOOGLE_CLIENT_ID` (a Google OAuth Web client id) enables the Sheets data source;
-when unset, the UI shows only the ODS-upload path. For the GitHub Pages deploy the value
-comes from a `VITE_GOOGLE_CLIENT_ID` repo secret, read at build time in `pages.yml`. See
-the README for the one-time Google Cloud setup and the ODS→Sheets migration. Auth tokens
-are held in memory only; the chosen spreadsheet id is persisted in `localStorage`
-(`storage.ts`).
+`VITE_GOOGLE_CLIENT_ID` (OAuth Web client id) and `VITE_GOOGLE_API_KEY` (Picker developer
+key) enable the Sheets data source; when either is unset, the UI shows only the ODS-upload
+path. For the GitHub Pages deploy the values come from repo secrets of the same names,
+read at build time in `pages.yml`. OAuth scopes are `spreadsheets.readonly` + `drive.file`
+(least privilege: the app only accesses the sheet the user picks). See the README for the
+one-time Google Cloud setup and the ODS→Sheets migration. Auth tokens are held in memory
+only; the chosen spreadsheet id is persisted in `localStorage` (`storage.ts`).
 
 ## Tests
 

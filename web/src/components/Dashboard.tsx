@@ -24,10 +24,12 @@ export function Dashboard({
   inputs,
   onReset,
   onRefresh,
+  onPickAnother,
 }: {
   inputs: ParsedInputs;
   onReset: () => void;
   onRefresh?: () => void;
+  onPickAnother?: () => void;
 }) {
   const { phases, cashFlows, actuals } = inputs;
   const timeline = useMemo(() => buildTimeline(phases), [phases]);
@@ -102,6 +104,11 @@ export function Dashboard({
         {onRefresh && (
           <button type="button" className="reset" onClick={onRefresh}>
             Refresh from Sheet
+          </button>
+        )}
+        {onPickAnother && (
+          <button type="button" className="reset" onClick={onPickAnother}>
+            Choose a different sheet
           </button>
         )}
         <button type="button" className="reset" onClick={onReset}>

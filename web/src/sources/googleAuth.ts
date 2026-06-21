@@ -1,10 +1,9 @@
-import { IngestionError } from "../models";
-import type { FetchLike } from "./googleSheets";
-
 const GIS_SRC = "https://accounts.google.com/gsi/client";
+// drive.file = least privilege: the app only gets access to the sheet the user
+// explicitly picks via the Picker. spreadsheets.readonly reads its values.
 const SCOPES = [
   "https://www.googleapis.com/auth/spreadsheets.readonly",
-  "https://www.googleapis.com/auth/drive.metadata.readonly",
+  "https://www.googleapis.com/auth/drive.file",
 ].join(" ");
 
 let gisPromise: Promise<void> | null = null;
@@ -52,30 +51,4 @@ export async function requestAccessToken(clientId: string): Promise<string> {
     });
     client.requestAccessToken();
   });
-}
-
-export interface SpreadsheetRef {
-  id: string;
-  name: string;
-}
-
-/** List the signed-in user's spreadsheets (most-recently-modified first). */
-export async function listSpreadsheets(
-  accessToken: string,
-  fetchImpl: FetchLike = fetch
-): Promise<SpreadsheetRef[]> {
-  const params = new URLSearchParams({
-    q: "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
-    fields: "files(id,name)",
-    orderBy: "modifiedTime desc",
-    pageSize: "100",
-  });
-  const res = await fetchImpl(`https://www.googleapis.com/drive/v3/files?${params}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!res.ok) {
-    throw new IngestionError(`Drive request failed (${res.status})`);
-  }
-  const body = (await res.json()) as { files?: SpreadsheetRef[] };
-  return body.files ?? [];
 }

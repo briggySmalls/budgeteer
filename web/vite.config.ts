@@ -22,6 +22,8 @@ export default defineConfig({
         "src/**/*.d.ts",
         "src/App.tsx",
         "src/components/**",
+        "src/sources/googleAuth.ts",
+        "src/sources/googlePicker.ts",
       ],
       thresholds: { lines: 85, statements: 85, functions: 85, branches: 80 },
     },
