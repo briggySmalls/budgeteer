@@ -1,19 +1,33 @@
 # Budgeteer
 
-Personal liquidity forecasting app. Define phases and cash flows in a LibreOffice spreadsheet; the app computes a monthly ledger and serves interactive Plotly charts via Streamlit with hot-reload on save.
+Personal liquidity forecasting app. Define phases and cash flows in a LibreOffice
+spreadsheet; the app computes a monthly ledger and renders interactive Plotly charts.
+
+It is a **100% client-side React + TypeScript app** (in `web/`). You upload your
+`model_inputs.ods` in the browser; nothing is sent to a server. The forecast engine,
+spreadsheet parsing and charts all run in the browser.
+
+> **Phase 2 (planned):** read the model directly from Google Sheets instead of an
+> uploaded file, behind the existing `DataSource` seam — removing the need to carry the
+> `.ods` between devices.
 
 ## Quick start
 
 ```bash
-make setup   # uv sync + pre-commit hooks
-make run     # launch Streamlit at http://localhost:8501
-make test    # pytest --cov
-make lint    # ruff check + format check
+make setup   # cd web && npm install (also wires git hooks)
+make run     # vite dev server; then upload model_inputs.ods
+make test    # vitest with coverage
+make lint    # biome + tsc + knip
 ```
+
+(Or run the `npm` scripts directly inside `web/`.)
 
 ## How it works
 
-Edit `model_inputs.ods` in LibreOffice. The app watches the file and reloads automatically on save.
+Edit `model_inputs.ods` in LibreOffice, then upload it in the app. Cross-sheet
+formulas (date anchors, RSU/FX calculations) are authored natively in LibreOffice;
+the app reads their **cached computed values** via SheetJS, so no formula logic is
+re-implemented.
 
 **Sheets the app reads:**
 
@@ -24,69 +38,28 @@ Edit `model_inputs.ods` in LibreOffice. The app watches the file and reloads aut
 | `One_Off_Cash_Flows` | `Name, Direction, Amount, Date` | |
 | `Actuals` | `Date, Liquidity` | Optional; sheet must exist |
 
-Any other sheets (e.g. `Variables` for shared constants) are ignored by the parser and can be used freely for LibreOffice formulas.
+Any other sheets (e.g. `Variables` for shared constants) are ignored by the parser and
+can be used freely for LibreOffice formulas.
 
-## Modifying model_inputs.ods from Python
+## Architecture
 
-When you need to add rows, rename columns, or restructure the file, use the migration framework rather than editing the ODS directly or regenerating from scratch. Regenerating destroys LibreOffice-authored formulas (date anchors, cross-sheet references).
+Pipeline: **`.ods` upload → `DataSource` → ingest → models → engine → charts → React UI**
 
-### Writing a migration script
+- `web/src/dates.ts` — timezone-safe UTC "civil date" helpers
+- `web/src/models.ts` — `Phase` / `RecurringCashFlow` / `OneOffCashFlow` /
+  `LiquidityActual` with construction-time validation
+- `web/src/engine.ts` — pure forecast engine (day-overlap proration, ledger,
+  phase/period aggregates)
+- `web/src/ingest.ts` — parses raw sheet rows into models; the `DataSource` interface
+  decouples parsing from storage
+- `web/src/sources/odsUpload.ts` — `OdsUploadSource` reads an uploaded `.ods` (SheetJS),
+  converting serial dates to UTC-midnight dates
+- `web/src/charts.ts` — Plotly figure builders
+- `web/src/App.tsx` + `web/src/components/` — upload screen and dashboard
 
-Create a file in `scripts/` and use `budgeteer/ods_etl.py`:
+## Development
 
-```python
-from pathlib import Path
-from budgeteer.ods_etl import (
-    run_migration, get_sheet, add_sheet,
-    append_row, remove_rows,
-    str_cell, float_cell, date_cell, formula_cell,
-)
-
-def transform(doc):
-    sheet = get_sheet(doc, "One_Off_Cash_Flows")
-
-    # Remove rows whose Name contains "Old Label"
-    remove_rows(sheet, lambda cells: "Old Label" in cells[0])
-
-    # Append a plain row
-    append_row(sheet,
-        str_cell("School fees"),
-        str_cell("Outflow"),
-        float_cell(3500.00),
-        date_cell(date(2027, 9, 1)),
-    )
-
-    # Append a row whose Amount is a LibreOffice formula
-    append_row(sheet,
-        str_cell("RSU Vest"),
-        str_cell("Inflow"),
-        formula_cell("=172*$Variables.$B$2*$Variables.$B$3", cached_value=4291.77),
-        date_cell(date(2026, 7, 1)),
-    )
-
-if __name__ == "__main__":
-    run_migration(Path("model_inputs.ods"), transform)
-```
-
-Run it with:
-
-```bash
-uv run python scripts/your_migration.py
-```
-
-`run_migration` automatically:
-- backs up the file to `model_inputs.bkp.ods` before touching it
-- strips the ~1 million blank trailing rows LibreOffice writes, which otherwise cause a row-count warning on next open
-
-### Formula cells
-
-`formula_cell(expr, cached_value)` writes a cell with a LibreOffice formula.
-
-- Write `expr` exactly as you would in the LibreOffice formula bar, with a leading `=`:
-  ```python
-  formula_cell("=172*$Variables.$B$2*$Variables.$B$3*$Variables.$B$4", 4291.77)
-  ```
-- Cross-sheet references: use `$SheetName.$Col$Row` (e.g. `$Variables.$B$2`). **Do not** use `[.Sheet.$Col$Row]` — that triggers `Err:508` in LibreOffice.
-- `cached_value` is stored so pandas reads a valid number before LibreOffice recalculates. It must be a reasonable approximation of the formula result.
-
-See `scripts/migrate_add_rsus.py` for a complete example.
+- **Build/test:** Vite + Vitest (`web/`).
+- **Quality:** Biome (lint + format), `tsc --noEmit` (strict), knip (dead code),
+  enforced by a Husky + lint-staged pre-commit hook and the `web-ci` GitHub Action.
+- **Deploy:** `pages.yml` builds `web/` and publishes the static site to GitHub Pages.

@@ -1,19 +1,16 @@
 .PHONY: run test lint format setup
 
-setup:            ## Install Python + web deps (web install also wires git hooks)
-	uv sync
+setup:            ## Install web deps (also wires the git hooks via husky)
 	cd web && npm install
 
 run:              ## Start the web app (client-side SPA)
 	cd web && npm run dev
 
-test:             ## Run the Python reference/ETL tests with coverage
-	uv run pytest --cov
+test:             ## Run tests with coverage
+	cd web && npm run coverage
 
-lint:             ## Run Python linter checks
-	uv run ruff check .
-	uv run ruff format --check .
+lint:             ## Lint + format check + typecheck + dead-code check
+	cd web && npx biome ci . && npm run typecheck && npm run knip
 
-format:           ## Auto-format and fix Python lint issues
-	uv run ruff format .
-	uv run ruff check --fix .
+format:           ## Auto-format and fix lint issues
+	cd web && npm run check
