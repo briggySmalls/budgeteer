@@ -57,9 +57,11 @@ enable the **Google Sheets API**, **Google Drive API** and **Google Picker API**
     - `http://localhost:5173` (dev)
     - `https://briggysmalls.github.io` (deployed)
 - Create an **API key** — the Picker's developer key:
-  - **Application restrictions → Websites (HTTP referrers)** (path allowed):
-    - `http://localhost:5173/*` (dev)
-    - `https://briggysmalls.github.io/budgeteer/*` (deployed)
+  - **Application restrictions → Websites (HTTP referrers)** — use the bare domain/subdomain;
+    the `*` wildcard is only for subdomains, there is no path wildcard, and query/fragments
+    are ignored:
+    - `http://localhost:5173` (dev)
+    - `https://briggysmalls.github.io` (deployed)
   - **API restrictions**: limit to the Google Sheets, Drive and Picker APIs.
 
 Then wire the values in:
