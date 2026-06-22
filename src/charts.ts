@@ -91,7 +91,8 @@ function phaseBands(ledger: LedgerRow[]): PhaseBand[] {
 
 export function combinedMonthlyChart(
   ledger: LedgerRow[],
-  actuals: LiquidityActual[] | null = null
+  actuals: LiquidityActual[] | null = null,
+  dark = false
 ): ChartFigure {
   const x = ledger.map((r) => formatISO(r.monthYear));
   const barColors = ledger.map((r) => (r.netFlow >= 0 ? "#2ecc71" : "#e74c3c"));
@@ -219,8 +220,8 @@ export function combinedMonthlyChart(
       y: actuals.map((a) => a.amount),
       mode: "markers+lines",
       name: "Actual Liquidity",
-      marker: { symbol: "diamond", size: 8, color: "#2c3e50" },
-      line: { color: "#2c3e50", width: 1.5 },
+      marker: { symbol: "diamond", size: 8, color: dark ? "#bbb" : "#2c3e50" },
+      line: { color: dark ? "#bbb" : "#2c3e50", width: 1.5 },
     });
   }
 

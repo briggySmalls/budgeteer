@@ -6,6 +6,7 @@ import { requestAccessToken } from "./sources/googleAuth";
 import { pickSpreadsheet } from "./sources/googlePicker";
 import { GoogleSheetsSource } from "./sources/googleSheets";
 import { getStoredSheetId, setStoredSheetId } from "./storage";
+import { useTheme } from "./theme";
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
@@ -31,6 +32,7 @@ function errorMessage(e: unknown): string {
 
 export function App() {
   const [state, setState] = useState<State>({ status: "empty" });
+  const { theme, toggle } = useTheme();
 
   const loadSheet = useCallback(async (token: string, sheetId: string) => {
     setState({ status: "loading" });
@@ -85,6 +87,9 @@ export function App() {
     <div className="app">
       <header className="app-header">
         <h1>Budgeteer — Liquidity Forecast</h1>
+        <button type="button" className="theme-toggle" onClick={toggle} aria-label="Toggle theme">
+          {theme === "dark" ? "☀" : "☾"}
+        </button>
       </header>
 
       {state.status === "ready" ? (

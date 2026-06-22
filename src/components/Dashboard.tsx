@@ -10,6 +10,7 @@ import {
 import { formatGBP } from "../format";
 import type { ParsedInputs } from "../ingest";
 import { BudgeteerError } from "../models";
+import { useTheme } from "../theme";
 import { PlotlyChart } from "./PlotlyChart";
 
 type Tab = "monthly" | "waterfall" | "ledger";
@@ -32,6 +33,8 @@ export function Dashboard({
   onPickAnother?: () => void;
 }) {
   const { phases, cashFlows, actuals } = inputs;
+  const { theme } = useTheme();
+  const dark = theme === "dark";
   const timeline = useMemo(() => buildTimeline(phases), [phases]);
   const ledger = useMemo(
     () => computeLedger(timeline, phases, cashFlows, actuals.length > 0 ? actuals : null),
@@ -54,8 +57,8 @@ export function Dashboard({
   }
 
   const monthlyFigure = useMemo(
-    () => combinedMonthlyChart(ledger, actuals.length > 0 ? actuals : null),
-    [ledger, actuals]
+    () => combinedMonthlyChart(ledger, actuals.length > 0 ? actuals : null, dark),
+    [ledger, actuals, dark]
   );
 
   let waterfall: { summary: PeriodSummary } | { error: string };
