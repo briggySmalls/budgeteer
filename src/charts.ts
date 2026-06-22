@@ -6,7 +6,7 @@
  * with plotly.js. Phase bands, the zero line and the actuals overlay are encoded
  * as layout shapes/annotations (the JS equivalent of add_vrect/add_hline/add_shape).
  */
-import { addMonths, formatISO, month, year } from "./dates";
+import { addMonths, civilDate, formatISO, month, monthEnd, year } from "./dates";
 import type { LedgerRow, PeriodSummary } from "./engine";
 import { Direction, type LiquidityActual } from "./models";
 
@@ -94,7 +94,11 @@ export function combinedMonthlyChart(
   actuals: LiquidityActual[] | null = null,
   dark = false
 ): ChartFigure {
-  const x = ledger.map((r) => formatISO(r.monthYear));
+  const x = ledger.map((r) => {
+    const d = r.monthYear;
+    return formatISO(civilDate(year(d), month(d), 15));
+  });
+  const xEnd = ledger.map((r) => formatISO(monthEnd(r.monthYear)));
   const barColors = ledger.map((r) => (r.netFlow >= 0 ? "#2ecc71" : "#e74c3c"));
 
   const data: ChartTrace[] = [
@@ -102,12 +106,13 @@ export function combinedMonthlyChart(
       type: "bar",
       x,
       y: ledger.map((r) => r.netFlow),
+      width: 28 * 86_400_000,
       marker: { color: barColors },
       name: "Net Flow",
     },
     {
       type: "scatter",
-      x,
+      x: xEnd,
       y: ledger.map((r) => r.endingLiquidity),
       mode: "lines+markers",
       name: "Ending Liquidity",

@@ -14,6 +14,7 @@ import {
   maxDate,
   minDate,
   month,
+  monthEnd,
   monthStart,
   monthStartsBetween,
   year,
@@ -78,12 +79,8 @@ export function buildTimeline(phases: Phase[]): Date[] {
   return monthStartsBetween(start, end);
 }
 
-function monthEndOf(m: Date): Date {
-  return civilDate(year(m), month(m), daysInMonth(year(m), month(m)));
-}
-
 function findActivePhase(m: Date, phases: Phase[]): string | null {
-  const mEnd = monthEndOf(m);
+  const mEnd = monthEnd(m);
   for (const p of phases) {
     if (p.startDate.getTime() <= mEnd.getTime() && p.endDate.getTime() >= m.getTime()) {
       return p.name;
@@ -117,7 +114,7 @@ export function activeFraction(cf: AnyCashFlow, m: Date): number {
 
   if (cf.frequency === Frequency.Monthly) {
     const monthBegin = m;
-    const monthFinish = monthEndOf(m);
+    const monthFinish = monthEnd(m);
     const days = intervalOverlapDays(cf.startDate, cf.endDate, monthBegin, monthFinish);
     return days / MONTHLY_PERIOD_DAYS;
   }

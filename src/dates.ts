@@ -41,6 +41,11 @@ export function monthStart(d: Date): Date {
   return civilDate(year(d), month(d), 1);
 }
 
+/** Last day of `d`'s month, at UTC midnight. */
+export function monthEnd(d: Date): Date {
+  return civilDate(year(d), month(d), daysInMonth(year(d), month(d)));
+}
+
 /** Add `n` whole months to a month-start date (handles year rollover). */
 export function addMonths(d: Date, n: number): Date {
   return new Date(Date.UTC(year(d), month(d) - 1 + n, 1));
