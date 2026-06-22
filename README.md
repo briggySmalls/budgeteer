@@ -1,23 +1,22 @@
 # Budgeteer
 
-Personal liquidity forecasting app. Define phases and cash flows in a LibreOffice
-spreadsheet; the app computes a monthly ledger and renders interactive Plotly charts.
+Personal liquidity forecasting app. Define phases and cash flows in a Google Sheet;
+the app computes a monthly ledger and renders interactive Plotly charts.
 
 It is a **100% client-side React + TypeScript app** (in `web/`). Nothing is sent to a
 server you run — the forecast engine, spreadsheet parsing and charts all run in the
-browser. Two data sources are supported behind a common `DataSource` seam:
+browser. The model is read from **Google Sheets** behind the `DataSource` seam:
 
-- **Google Sheets** (recommended) — sign in with Google and pick a Sheet via the native
-  Google Picker, then read the model straight from it, so there is no file to carry between
-  devices. The app uses the `drive.file` scope, so it only ever gains access to the sheet
+- **Google Sheets** — sign in with Google and pick a Sheet via the native Google Picker,
+  then read the model straight from it, so there is no file to carry between devices.
+  The app uses the `drive.file` scope, so it only ever gains access to the sheet
   you explicitly pick.
-- **ODS upload** (fallback / offline) — upload a `model_inputs.ods` file.
 
 ## Quick start
 
 ```bash
 make setup   # cd web && npm install (also wires git hooks)
-make run     # vite dev server; then upload model_inputs.ods
+make run     # vite dev server
 make test    # vitest with coverage
 make lint    # biome + tsc + knip
 ```
@@ -26,10 +25,9 @@ make lint    # biome + tsc + knip
 
 ## How it works
 
-Edit `model_inputs.ods` in LibreOffice, then upload it in the app. Cross-sheet
-formulas (date anchors, RSU/FX calculations) are authored natively in LibreOffice;
-the app reads their **cached computed values** via SheetJS, so no formula logic is
-re-implemented.
+Create your model as a Google Sheet with the four required tabs below. Cross-sheet
+formulas (date anchors, RSU/FX calculations) work natively in Sheets — the app reads
+formula results, not the formulas themselves.
 
 **Sheets the app reads:**
 
@@ -71,23 +69,21 @@ Then wire the values in:
 - GitHub Pages: set repo **secrets** of the same names (the build reads them). Both values
   are public (they ship in the bundle); the secrets are just how they reach the build.
 
-**2. Put your model in a Sheet**
+**2. Create your model Sheet**
 
-- Upload `model_inputs.ods` to Google Drive and open it with Google Sheets (File → Import,
-  or "Open with → Google Sheets"). Keep the same tab names, including `Variables`.
-- Check the formulas converted: LibreOffice `$Variables.$B$2` becomes `Variables!$B$2`;
-  `EDATE`/relative-cell arithmetic and the RSU cell references should survive — verify a
-  few. Set the spreadsheet locale/number format so dates are unambiguous.
-- The Sheet is private to you by default; that sharing is the app's access control.
+Create a Google Sheet with the four tabs listed above. You can start from
+`model_inputs.ods` by uploading it to Google Drive and opening with Google Sheets
+(File → Import, or "Open with → Google Sheets"). Check that formulas converted
+correctly — LibreOffice `$Variables.$B$2` becomes `Variables!$B$2`; `EDATE` and
+relative-cell arithmetic should survive.
 
-**3. Verify parity**
+**3. Use it**
 
-Open the Sheet in the app and confirm the ledger matches the same model uploaded as
-`.ods` — they should agree to the penny (both run the same engine).
+Open the app, sign in, pick your Sheet, and the forecast renders immediately.
 
 ## Architecture
 
-Pipeline: **`.ods` upload → `DataSource` → ingest → models → engine → charts → React UI**
+Pipeline: **Sheets API → `DataSource` → ingest → models → engine → charts → React UI**
 
 - `web/src/dates.ts` — timezone-safe UTC "civil date" helpers
 - `web/src/models.ts` — `Phase` / `RecurringCashFlow` / `OneOffCashFlow` /

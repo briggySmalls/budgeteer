@@ -9,16 +9,16 @@ in `web/`. Parsing, the forecast engine, and Plotly charts all run client-side. 
 no backend and no Python — an earlier Streamlit/Python implementation was ported to
 TypeScript and removed (see git history if you need the original).
 
-The model is read through a `DataSource` seam with two implementations: **Google Sheets**
-(read via the Sheets API as the signed-in user) and an **ODS upload** fallback. Both
-yield the same row shape to ingest.
+The model is read through a `DataSource` seam with a **Google Sheets** implementation
+(read via the Sheets API as the signed-in user) and a legacy `OdsUploadSource` kept for
+tests. Both yield the same row shape to ingest.
 
 ## Commands
 
 All commands run from `web/` (the `Makefile` at the repo root delegates to them):
 
 - `make setup` / `cd web && npm install` — install deps (also wires the git hooks)
-- `make run` / `npm run dev` — Vite dev server; upload `model_inputs.ods` to use it
+- `make run` / `npm run dev` — Vite dev server
 - `make test` / `npm run coverage` — Vitest with coverage thresholds
 - `make lint` — `biome ci .` + `tsc --noEmit` + `knip`
 - `make format` / `npm run check` — Biome auto-fix + format
@@ -31,7 +31,7 @@ pre-commit hook runs Biome on staged files.
 
 ## Architecture
 
-Pipeline: **`.ods` upload → `DataSource` → ingest → models → engine → charts → React UI**
+Pipeline: **Sheets API → `DataSource` → ingest → models → engine → charts → React UI**
 
 - `web/src/dates.ts` — timezone-safe "civil date" helpers. Every date is a UTC-midnight
   `Date`; all arithmetic is in UTC so month/day boundaries never drift. `monthStartsBetween`
@@ -72,12 +72,12 @@ Do not regenerate it from scratch — that destroys the LibreOffice-authored for
 ### Google Sheets integration
 
 `VITE_GOOGLE_CLIENT_ID` (OAuth Web client id) and `VITE_GOOGLE_API_KEY` (Picker developer
-key) enable the Sheets data source; when either is unset, the UI shows only the ODS-upload
-path. For the GitHub Pages deploy the values come from repo secrets of the same names,
-read at build time in `pages.yml`. OAuth scopes are `spreadsheets.readonly` + `drive.file`
-(least privilege: the app only accesses the sheet the user picks). See the README for the
-one-time Google Cloud setup and the ODS→Sheets migration. Auth tokens are held in memory
-only; the chosen spreadsheet id is persisted in `localStorage` (`storage.ts`).
+key) enable the Sheets data source; when either is unset, the UI shows only a hint to
+configure them. For the GitHub Pages deploy the values come from repo secrets of the same
+names, read at build time in `pages.yml`. OAuth scopes are `spreadsheets.readonly` +
+`drive.file` (least privilege: the app only accesses the sheet the user picks). See the
+README for the one-time Google Cloud setup. Auth tokens are held in memory only; the
+chosen spreadsheet id is persisted in `localStorage` (`storage.ts`).
 
 ## Tests
 

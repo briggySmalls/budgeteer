@@ -5,7 +5,6 @@ import { BudgeteerError } from "./models";
 import { requestAccessToken } from "./sources/googleAuth";
 import { pickSpreadsheet } from "./sources/googlePicker";
 import { GoogleSheetsSource } from "./sources/googleSheets";
-import { OdsUploadSource } from "./sources/odsUpload";
 import { getStoredSheetId, setStoredSheetId } from "./storage";
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -32,16 +31,6 @@ function errorMessage(e: unknown): string {
 
 export function App() {
   const [state, setState] = useState<State>({ status: "empty" });
-
-  const onFile = useCallback(async (file: File) => {
-    setState({ status: "loading" });
-    try {
-      const inputs = await loadInputs(await OdsUploadSource.fromFile(file));
-      setState({ status: "ready", inputs });
-    } catch (e) {
-      setState({ status: "error", message: errorMessage(e) });
-    }
-  }, []);
 
   const loadSheet = useCallback(async (token: string, sheetId: string) => {
     setState({ status: "loading" });
@@ -121,22 +110,6 @@ export function App() {
               Google Sheets.
             </p>
           )}
-
-          <p className="hint">or</p>
-
-          <label className="upload-label">
-            Upload a <code>.ods</code> file
-            <input
-              type="file"
-              accept=".ods"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  void onFile(file);
-                }
-              }}
-            />
-          </label>
 
           {state.status === "loading" && <p>Loading…</p>}
           {state.status === "error" && <p className="error">{state.message}</p>}
