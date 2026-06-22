@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Budgeteer is a **100% client-side React + TypeScript** liquidity-forecasting app, living
-in `web/`. Parsing, the forecast engine, and Plotly charts all run client-side. There is
-no backend and no Python — an earlier Streamlit/Python implementation was ported to
+Budgeteer is a **100% client-side React + TypeScript** liquidity-forecasting app.
+Parsing, the forecast engine, and Plotly charts all run client-side. There is no
+backend and no Python — an earlier Streamlit/Python implementation was ported to
 TypeScript and removed (see git history if you need the original).
 
 The model is read through a `DataSource` seam with a **Google Sheets** implementation
@@ -15,17 +15,17 @@ tests. Both yield the same row shape to ingest.
 
 ## Commands
 
-All commands run from `web/` (the `Makefile` at the repo root delegates to them):
+All commands run from the repo root:
 
-- `make setup` / `cd web && npm install` — install deps (also wires the git hooks)
+- `make setup` / `npm install` — install deps (also wires the git hooks)
 - `make run` / `npm run dev` — Vite dev server
 - `make test` / `npm run coverage` — Vitest with coverage thresholds
 - `make lint` — `biome ci .` + `tsc --noEmit` + `knip`
 - `make format` / `npm run check` — Biome auto-fix + format
 
-Run a single test: `cd web && npx vitest run src/engine.test.ts`
+Run a single test: `npx vitest run src/engine.test.ts`
 
-CI (`.github/workflows/web-ci.yml`) runs Biome, tsc, Vitest+coverage, knip and the Vite
+CI (`.github/workflows/ci.yml`) runs Biome, tsc, Vitest+coverage, knip and the Vite
 build. `pages.yml` deploys the static build to GitHub Pages. A Husky + lint-staged
 pre-commit hook runs Biome on staged files.
 
@@ -33,40 +33,40 @@ pre-commit hook runs Biome on staged files.
 
 Pipeline: **Sheets API → `DataSource` → ingest → models → engine → charts → React UI**
 
-- `web/src/dates.ts` — timezone-safe "civil date" helpers. Every date is a UTC-midnight
+- `src/dates.ts` — timezone-safe "civil date" helpers. Every date is a UTC-midnight
   `Date`; all arithmetic is in UTC so month/day boundaries never drift. `monthStartsBetween`
   reproduces `pandas.date_range(freq="MS")`.
-- `web/src/models.ts` — `Direction`/`Frequency` enums; `Phase`, `RecurringCashFlow`,
+- `src/models.ts` — `Direction`/`Frequency` enums; `Phase`, `RecurringCashFlow`,
   `OneOffCashFlow`, `LiquidityActual` classes with construction-time validation; the
   `BudgeteerError`/`IngestionError`/`EngineError` hierarchy. Instances are frozen.
-- `web/src/engine.ts` — pure forecast functions, no I/O: `buildTimeline`,
+- `src/engine.ts` — pure forecast functions, no I/O: `buildTimeline`,
   `activeFraction` (day-overlap proration; monthly = days/`MONTHLY_PERIOD_DAYS`,
   annual fires only in the anchor month), `computeLedger` (seeds from the latest actual,
   filtering one-offs strictly before it), `aggregateByPhase`, `aggregateCashflowsInPeriod`.
   Cash-flow kind is discriminated with `instanceof`.
-- `web/src/ingest.ts` — `parseInputs(sheets)` turns raw rows into validated models;
+- `src/ingest.ts` — `parseInputs(sheets)` turns raw rows into validated models;
   the `DataSource` interface (`load(): Promise<SheetSet>`) decouples parsing from storage.
-- `web/src/sources/odsUpload.ts` — `OdsUploadSource`: reads an uploaded `.ods` with
+- `src/sources/odsUpload.ts` — `OdsUploadSource`: reads an uploaded `.ods` with
   SheetJS, which returns the **cached computed value** of formula cells, so the
   LibreOffice formula layer is preserved.
-- `web/src/sources/googleSheets.ts` — `GoogleSheetsSource`: reads via the Sheets API
+- `src/sources/googleSheets.ts` — `GoogleSheetsSource`: reads via the Sheets API
   `values:batchGet` (`UNFORMATTED_VALUE` + `SERIAL_NUMBER`), given a spreadsheet id and a
   bearer token. `googleAuth.ts` runs the Google Identity Services token flow (client id
   from `VITE_GOOGLE_CLIENT_ID`); `googlePicker.ts` opens the native Google Picker (API key
   from `VITE_GOOGLE_API_KEY`) for the user to choose the spreadsheet.
-- `web/src/sources/sheetSchema.ts` — shared by both sources: the date-column schema and
+- `src/sources/sheetSchema.ts` — shared by both sources: the date-column schema and
   the 1900-system serial→UTC-midnight-date conversion, so ingest stays source-agnostic.
-- `web/src/charts.ts` — pure Plotly figure builders (data + layout objects), so they are
-  unit-testable without a DOM. `web/src/components/PlotlyChart.tsx` renders them,
+- `src/charts.ts` — pure Plotly figure builders (data + layout objects), so they are
+  unit-testable without a DOM. `src/components/PlotlyChart.tsx` renders them,
   dynamically importing plotly.js so it is code-split out of the main bundle.
-- `web/src/App.tsx` + `web/src/components/` — upload screen and the three-tab dashboard
+- `src/App.tsx` + `src/components/` — upload screen and the three-tab dashboard
   (Monthly View with click-to-drill-down, Period Waterfall, Ledger Data).
 
 ### The ODS file
 
 `model_inputs.ods` is hand-maintained in LibreOffice and committed at the repo root. It
 may use cross-sheet formulas (e.g. dates anchored on a `Variables` cell). It is both the
-app's input (uploaded at runtime) and the fixture for `web/src/sources/odsUpload.test.ts`.
+app's input (uploaded at runtime) and the fixture for `src/sources/odsUpload.test.ts`.
 Do not regenerate it from scratch — that destroys the LibreOffice-authored formulas.
 
 ### Google Sheets integration

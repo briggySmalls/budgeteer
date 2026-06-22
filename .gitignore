@@ -1,17 +1,8 @@
-__pycache__/
-*.pyc
-.venv/
-.env
-*.egg-info/
-dist/
-build/
-.~lock.*
-~$*
+node_modules
+dist
+coverage
+*.local
+.DS_Store
 
 # Personal model files — never commit (contains real financial data).
 *.ods
-.mypy_cache/
-.pytest_cache/
-.ruff_cache/
-.coverage
-htmlcov/

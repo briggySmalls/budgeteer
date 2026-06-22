@@ -3,9 +3,9 @@
 Personal liquidity forecasting app. Define phases and cash flows in a Google Sheet;
 the app computes a monthly ledger and renders interactive Plotly charts.
 
-It is a **100% client-side React + TypeScript app** (in `web/`). Nothing is sent to a
-server you run — the forecast engine, spreadsheet parsing and charts all run in the
-browser. The model is read from **Google Sheets** behind the `DataSource` seam:
+It is a **100% client-side React + TypeScript app**. Nothing is sent to a server you
+run — the forecast engine, spreadsheet parsing and charts all run in the browser.
+The model is read from **Google Sheets** behind the `DataSource` seam:
 
 - **Google Sheets** — sign in with Google and pick a Sheet via the native Google Picker,
   then read the model straight from it, so there is no file to carry between devices.
@@ -15,13 +15,13 @@ browser. The model is read from **Google Sheets** behind the `DataSource` seam:
 ## Quick start
 
 ```bash
-make setup   # cd web && npm install (also wires git hooks)
+make setup   # npm install (also wires git hooks)
 make run     # vite dev server
 make test    # vitest with coverage
 make lint    # biome + tsc + knip
 ```
 
-(Or run the `npm` scripts directly inside `web/`.)
+(Or run the `npm` scripts directly.)
 
 ## How it works
 
@@ -64,7 +64,7 @@ enable the **Google Sheets API**, **Google Drive API** and **Google Picker API**
 
 Then wire the values in:
 
-- Local dev: copy `web/.env.example` to `web/.env.local` and set `VITE_GOOGLE_CLIENT_ID`
+- Local dev: copy `.env.example` to `.env.local` and set `VITE_GOOGLE_CLIENT_ID`
   and `VITE_GOOGLE_API_KEY`.
 - GitHub Pages: set repo **secrets** of the same names (the build reads them). Both values
   are public (they ship in the bundle); the secrets are just how they reach the build.
@@ -85,24 +85,24 @@ Open the app, sign in, pick your Sheet, and the forecast renders immediately.
 
 Pipeline: **Sheets API → `DataSource` → ingest → models → engine → charts → React UI**
 
-- `web/src/dates.ts` — timezone-safe UTC "civil date" helpers
-- `web/src/models.ts` — `Phase` / `RecurringCashFlow` / `OneOffCashFlow` /
+- `src/dates.ts` — timezone-safe UTC "civil date" helpers
+- `src/models.ts` — `Phase` / `RecurringCashFlow` / `OneOffCashFlow` /
   `LiquidityActual` with construction-time validation
-- `web/src/engine.ts` — pure forecast engine (day-overlap proration, ledger,
+- `src/engine.ts` — pure forecast engine (day-overlap proration, ledger,
   phase/period aggregates)
-- `web/src/ingest.ts` — parses raw sheet rows into models; the `DataSource` interface
+- `src/ingest.ts` — parses raw sheet rows into models; the `DataSource` interface
   decouples parsing from storage
-- `web/src/sources/odsUpload.ts` — `OdsUploadSource` reads an uploaded `.ods` (SheetJS)
-- `web/src/sources/googleSheets.ts` — `GoogleSheetsSource` reads via the Sheets API
-- `web/src/sources/googleAuth.ts` — Google Identity Services token flow
-- `web/src/sources/googlePicker.ts` — native Google Picker for choosing a Sheet
-- `web/src/sources/sheetSchema.ts` — shared serial-date conversion + date-column schema
-- `web/src/charts.ts` — Plotly figure builders
-- `web/src/App.tsx` + `web/src/components/` — upload screen and dashboard
+- `src/sources/odsUpload.ts` — `OdsUploadSource` reads an uploaded `.ods` (SheetJS)
+- `src/sources/googleSheets.ts` — `GoogleSheetsSource` reads via the Sheets API
+- `src/sources/googleAuth.ts` — Google Identity Services token flow
+- `src/sources/googlePicker.ts` — native Google Picker for choosing a Sheet
+- `src/sources/sheetSchema.ts` — shared serial-date conversion + date-column schema
+- `src/charts.ts` — Plotly figure builders
+- `src/App.tsx` + `src/components/` — upload screen and dashboard
 
 ## Development
 
-- **Build/test:** Vite + Vitest (`web/`).
+- **Build/test:** Vite + Vitest.
 - **Quality:** Biome (lint + format), `tsc --noEmit` (strict), knip (dead code),
-  enforced by a Husky + lint-staged pre-commit hook and the `web-ci` GitHub Action.
-- **Deploy:** `pages.yml` builds `web/` and publishes the static site to GitHub Pages.
+  enforced by a Husky + lint-staged pre-commit hook and the CI GitHub Action.
+- **Deploy:** `pages.yml` builds and publishes the static site to GitHub Pages.
