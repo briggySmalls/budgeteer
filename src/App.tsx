@@ -1,11 +1,17 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Dashboard } from "./components/Dashboard";
 import { type ParsedInputs, loadInputs } from "./ingest";
 import { BudgeteerError } from "./models";
 import { requestAccessToken } from "./sources/googleAuth";
 import { pickSpreadsheet } from "./sources/googlePicker";
 import { GoogleSheetsSource } from "./sources/googleSheets";
-import { getStoredSheetId, setStoredSheetId } from "./storage";
+import {
+  clearSessionToken,
+  getSessionToken,
+  getStoredSheetId,
+  setSessionToken,
+  setStoredSheetId,
+} from "./storage";
 import { useTheme } from "./theme";
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -21,7 +27,7 @@ type State =
   | { status: "empty" }
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "ready"; inputs: ParsedInputs; google?: GoogleSession };
+  | { status: "ready"; inputs: ParsedInputs; google: GoogleSession };
 
 function errorMessage(e: unknown): string {
   if (e instanceof BudgeteerError) {
@@ -33,6 +39,7 @@ function errorMessage(e: unknown): string {
 export function App() {
   const [state, setState] = useState<State>({ status: "empty" });
   const { theme, toggle } = useTheme();
+  const autoRestored = useRef(false);
 
   const loadSheet = useCallback(async (token: string, sheetId: string) => {
     setState({ status: "loading" });
@@ -47,7 +54,6 @@ export function App() {
     }
   }, []);
 
-  // Open the Picker; load the chosen sheet, or fall back to `onCancel`.
   const pick = useCallback(
     async (token: string, onCancel: () => void) => {
       if (!API_KEY) {
@@ -69,7 +75,8 @@ export function App() {
     }
     setState({ status: "loading" });
     try {
-      const token = await requestAccessToken(CLIENT_ID);
+      const { token, expiresIn } = await requestAccessToken(CLIENT_ID);
+      setSessionToken(token, expiresIn);
       const stored = getStoredSheetId();
       if (stored) {
         await loadSheet(token, stored);
@@ -77,11 +84,23 @@ export function App() {
         await pick(token, () => setState({ status: "empty" }));
       }
     } catch (e) {
+      clearSessionToken();
       setState({ status: "error", message: errorMessage(e) });
     }
   }, [loadSheet, pick]);
 
-  const google = state.status === "ready" ? state.google : undefined;
+  // Auto-restore a valid session on page load.
+  useEffect(() => {
+    if (autoRestored.current || !GOOGLE_ENABLED) {
+      return;
+    }
+    autoRestored.current = true;
+    const token = getSessionToken();
+    const sheetId = getStoredSheetId();
+    if (token && sheetId) {
+      void loadSheet(token, sheetId);
+    }
+  }, [loadSheet]);
 
   return (
     <div className="app">
@@ -95,9 +114,12 @@ export function App() {
       {state.status === "ready" ? (
         <Dashboard
           inputs={state.inputs}
-          onReset={() => setState({ status: "empty" })}
-          onRefresh={google ? () => void loadSheet(google.token, google.sheetId) : undefined}
-          onPickAnother={google ? () => void pick(google.token, () => {}) : undefined}
+          onReset={() => {
+            clearSessionToken();
+            setState({ status: "empty" });
+          }}
+          onRefresh={() => void loadSheet(state.google.token, state.google.sheetId)}
+          onPickAnother={() => void pick(state.google.token, () => {})}
         />
       ) : (
         <div className="upload">

@@ -1,5 +1,7 @@
 const SHEET_ID_KEY = "budgeteer.spreadsheetId";
 const THEME_KEY = "budgeteer.theme";
+const SESSION_TOKEN_KEY = "budgeteer.token";
+const SESSION_EXPIRY_KEY = "budgeteer.expiresAt";
 
 /** Persist the chosen Google spreadsheet id in the browser (per device). */
 export function getStoredSheetId(): string | null {
@@ -42,6 +44,39 @@ export function setStoredTheme(value: "light" | "dark" | null): void {
     } else {
       localStorage.setItem(THEME_KEY, value);
     }
+  } catch {
+    // non-fatal
+  }
+}
+
+/** Session-level token storage (survives page refreshes, cleared on tab close). */
+export function getSessionToken(): string | null {
+  try {
+    const token = sessionStorage.getItem(SESSION_TOKEN_KEY);
+    const expiresAt = sessionStorage.getItem(SESSION_EXPIRY_KEY);
+    if (token && expiresAt && Number(expiresAt) > Date.now()) {
+      return token;
+    }
+    clearSessionToken();
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function setSessionToken(token: string, expiresIn: number): void {
+  try {
+    sessionStorage.setItem(SESSION_TOKEN_KEY, token);
+    sessionStorage.setItem(SESSION_EXPIRY_KEY, String(Date.now() + expiresIn * 1000));
+  } catch {
+    // sessionStorage unavailable — non-fatal.
+  }
+}
+
+export function clearSessionToken(): void {
+  try {
+    sessionStorage.removeItem(SESSION_TOKEN_KEY);
+    sessionStorage.removeItem(SESSION_EXPIRY_KEY);
   } catch {
     // non-fatal
   }

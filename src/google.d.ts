@@ -3,6 +3,7 @@
 // Picker API (via https://apis.google.com/js/api.js).
 interface GisTokenResponse {
   access_token: string;
+  expires_in?: number;
   error?: string;
 }
 
@@ -13,6 +14,7 @@ interface GisTokenClient {
 interface GisTokenClientConfig {
   client_id: string;
   scope: string;
+  prompt?: string;
   callback: (response: GisTokenResponse) => void;
   error_callback?: (error: { type?: string; message?: string }) => void;
 }
