@@ -22,42 +22,108 @@ export interface ChartFigure {
   layout: Record<string, unknown>;
 }
 
-const PHASE_COLORS = [
-  "rgba(99, 110, 250, 0.1)",
-  "rgba(239, 85, 59, 0.1)",
-  "rgba(0, 204, 150, 0.1)",
-  "rgba(171, 99, 250, 0.1)",
-  "rgba(255, 161, 90, 0.1)",
-  "rgba(25, 211, 243, 0.1)",
-];
+type Shape = Record<string, unknown>;
+type Annotation = Record<string, unknown>;
+type Line = Record<string, unknown>;
 
-const PHASE_BORDER_COLORS = [
-  "rgba(99, 110, 250, 0.4)",
-  "rgba(239, 85, 59, 0.4)",
-  "rgba(0, 204, 150, 0.4)",
-  "rgba(171, 99, 250, 0.4)",
-  "rgba(255, 161, 90, 0.4)",
-  "rgba(25, 211, 243, 0.4)",
-];
+/** Chart colours, kept in one place so the palette is easy to tweak. */
+const CHART = {
+  positive: "#2ecc71",
+  negative: "#e74c3c",
+  brand: "#636EFA",
+  zeroLine: "red",
+  actualLight: "#2c3e50",
+  actualDark: "#bbb",
+  modelledLight: "rgba(99,110,250,0.4)",
+  modelledDark: "rgba(180,180,210,0.5)",
+  actualBand: "rgba(0, 0, 0, 0.08)",
+  actualMarker: "rgba(0, 0, 0, 0.45)",
+  connector: "rgba(0,0,0,0.3)",
+} as const;
 
-const MONTH_ABBR = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
+const PHASE_FILL = [0.1, 0.4].map((alpha) => [
+  `rgba(99, 110, 250, ${alpha})`,
+  `rgba(239, 85, 59, ${alpha})`,
+  `rgba(0, 204, 150, ${alpha})`,
+  `rgba(171, 99, 250, ${alpha})`,
+  `rgba(255, 161, 90, ${alpha})`,
+  `rgba(25, 211, 243, ${alpha})`,
+]);
+const PHASE_COLORS = PHASE_FILL[0] as string[];
+const PHASE_BORDER_COLORS = PHASE_FILL[1] as string[];
+
+const MONTH_YEAR_FMT = new Intl.DateTimeFormat("en-GB", {
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
 
 /** "%b %Y", e.g. "Jun 2026". */
 export function monthYearLabel(d: Date): string {
-  return `${MONTH_ABBR[month(d) - 1]} ${year(d)}`;
+  return MONTH_YEAR_FMT.format(d);
+}
+
+/** A scatter line trace; `marker` is omitted unless supplied. */
+function lineTrace(
+  name: string,
+  x: string[],
+  y: number[],
+  mode: string,
+  line: Line,
+  marker?: Record<string, unknown>
+): ChartTrace {
+  return { type: "scatter", name, x, y, mode, line, ...(marker ? { marker } : {}) };
+}
+
+/** A full-height vertical band (paper-y), drawn below the data. */
+function verticalBand(x0: string, x1: string, fillcolor: string, line: Line = { width: 0 }): Shape {
+  return {
+    type: "rect",
+    xref: "x",
+    x0,
+    x1,
+    yref: "paper",
+    y0: 0,
+    y1: 1,
+    fillcolor,
+    line,
+    layer: "below",
+  };
+}
+
+/** A full-height vertical line (paper-y) at a single x. */
+function verticalLine(x: string, line: Line): Shape {
+  return { type: "line", xref: "x", x0: x, x1: x, yref: "paper", y0: 0, y1: 1, line };
+}
+
+/** A small label anchored to the top of the plot at a given x. */
+function topLabel(x: string, text: string, xanchor: "left" | "right"): Annotation {
+  return {
+    xref: "x",
+    x,
+    yref: "paper",
+    y: 1,
+    text,
+    showarrow: false,
+    font: { size: 11 },
+    xanchor,
+    yanchor: "top",
+  };
+}
+
+/** Earliest and latest actuals by date. Assumes a non-empty array. */
+function dateExtent(actuals: LiquidityActual[]): [LiquidityActual, LiquidityActual] {
+  let earliest = actuals[0] as LiquidityActual;
+  let latest = actuals[0] as LiquidityActual;
+  for (const a of actuals) {
+    if (a.date.getTime() < earliest.date.getTime()) {
+      earliest = a;
+    }
+    if (a.date.getTime() > latest.date.getTime()) {
+      latest = a;
+    }
+  }
+  return [earliest, latest];
 }
 
 interface PhaseBand {
@@ -95,34 +161,30 @@ export function combinedMonthlyChart(
   dark = false,
   modelLedger?: LedgerRow[]
 ): ChartFigure {
-  const x = ledger.map((r) => {
-    const d = r.monthYear;
-    return formatISO(civilDate(year(d), month(d), 15));
-  });
+  const xMid = ledger.map((r) => formatISO(civilDate(year(r.monthYear), month(r.monthYear), 15)));
   const xEnd = ledger.map((r) => formatISO(monthEnd(r.monthYear)));
-  const barColors = ledger.map((r) => (r.netFlow >= 0 ? "#2ecc71" : "#e74c3c"));
+  const barColors = ledger.map((r) => (r.netFlow >= 0 ? CHART.positive : CHART.negative));
 
   const data: ChartTrace[] = [
     {
       type: "bar",
-      x,
+      x: xMid,
       y: ledger.map((r) => r.netFlow),
       width: 28 * 86_400_000,
       marker: { color: barColors },
       name: "Net Flow",
     },
-    {
-      type: "scatter",
-      x: xEnd,
-      y: ledger.map((r) => r.endingLiquidity),
-      mode: "lines+markers",
-      name: "Extrapolated",
-      line: { color: "#636EFA", width: 2 },
-      marker: { size: 5 },
-    },
+    lineTrace(
+      "Extrapolated",
+      xEnd,
+      ledger.map((r) => r.endingLiquidity),
+      "lines+markers",
+      { color: CHART.brand, width: 2 },
+      { size: 5 }
+    ),
   ];
 
-  const shapes: Record<string, unknown>[] = [
+  const shapes: Shape[] = [
     {
       type: "line",
       xref: "paper",
@@ -131,10 +193,10 @@ export function combinedMonthlyChart(
       yref: "y",
       y0: 0,
       y1: 0,
-      line: { dash: "dash", color: "red", width: 1 },
+      line: { dash: "dash", color: CHART.zeroLine, width: 1 },
     },
   ];
-  const annotations: Record<string, unknown>[] = [
+  const annotations: Annotation[] = [
     {
       xref: "paper",
       x: 1,
@@ -150,100 +212,44 @@ export function combinedMonthlyChart(
   phaseBands(ledger).forEach((band, i) => {
     const color = PHASE_COLORS[i % PHASE_COLORS.length] as string;
     const border = PHASE_BORDER_COLORS[i % PHASE_BORDER_COLORS.length] as string;
-    shapes.push({
-      type: "rect",
-      xref: "x",
-      x0: formatISO(band.min),
-      x1: formatISO(addMonths(band.max, 1)),
-      yref: "paper",
-      y0: 0,
-      y1: 1,
-      fillcolor: color,
-      line: { width: 1, color: border },
-      layer: "below",
-    });
-    annotations.push({
-      xref: "x",
-      x: formatISO(band.min),
-      yref: "paper",
-      y: 1,
-      text: band.name,
-      showarrow: false,
-      xanchor: "left",
-      yanchor: "top",
-      font: { size: 11 },
-    });
+    shapes.push(
+      verticalBand(formatISO(band.min), formatISO(addMonths(band.max, 1)), color, {
+        width: 1,
+        color: border,
+      })
+    );
+    annotations.push(topLabel(formatISO(band.min), band.name, "left"));
   });
 
   if (actuals && actuals.length > 0) {
-    let earliest = actuals[0] as LiquidityActual;
-    let latest = actuals[0] as LiquidityActual;
-    for (const a of actuals) {
-      if (a.date.getTime() < earliest.date.getTime()) {
-        earliest = a;
-      }
-      if (a.date.getTime() > latest.date.getTime()) {
-        latest = a;
-      }
-    }
+    const [earliest, latest] = dateExtent(actuals);
     const latestIso = formatISO(latest.date);
-    shapes.push({
-      type: "rect",
-      xref: "x",
-      x0: formatISO(earliest.date),
-      x1: latestIso,
-      yref: "paper",
-      y0: 0,
-      y1: 1,
-      fillcolor: "rgba(0, 0, 0, 0.08)",
-      line: { width: 0 },
-      layer: "below",
-    });
-    shapes.push({
-      type: "line",
-      xref: "x",
-      x0: latestIso,
-      x1: latestIso,
-      yref: "paper",
-      y0: 0,
-      y1: 1,
-      line: { dash: "dash", color: "rgba(0, 0, 0, 0.45)", width: 1 },
-    });
-    annotations.push({
-      xref: "x",
-      x: latestIso,
-      yref: "paper",
-      y: 1,
-      text: "Latest actual",
-      showarrow: false,
-      font: { size: 11 },
-      xanchor: "right",
-      yanchor: "top",
-    });
-    data.push({
-      type: "scatter",
-      x: actuals.map((a) => formatISO(a.date)),
-      y: actuals.map((a) => a.amount),
-      mode: "markers+lines",
-      name: "Actual Liquidity",
-      marker: { symbol: "diamond", size: 8, color: dark ? "#bbb" : "#2c3e50" },
-      line: { color: dark ? "#bbb" : "#2c3e50", width: 1.5 },
-    });
+    const actualColor = dark ? CHART.actualDark : CHART.actualLight;
+    shapes.push(verticalBand(formatISO(earliest.date), latestIso, CHART.actualBand));
+    shapes.push(verticalLine(latestIso, { dash: "dash", color: CHART.actualMarker, width: 1 }));
+    annotations.push(topLabel(latestIso, "Latest actual", "right"));
+    data.push(
+      lineTrace(
+        "Actual Liquidity",
+        actuals.map((a) => formatISO(a.date)),
+        actuals.map((a) => a.amount),
+        "markers+lines",
+        { color: actualColor, width: 1.5 },
+        { symbol: "diamond", size: 8, color: actualColor }
+      )
+    );
   }
 
   if (modelLedger) {
-    data.push({
-      type: "scatter",
-      x: modelLedger.map((r) => formatISO(monthEnd(r.monthYear))),
-      y: modelLedger.map((r) => r.endingLiquidity),
-      mode: "lines",
-      name: "Modelled",
-      line: {
-        dash: "dot",
-        color: dark ? "rgba(180,180,210,0.5)" : "rgba(99,110,250,0.4)",
-        width: 1.5,
-      },
-    });
+    data.push(
+      lineTrace(
+        "Modelled",
+        modelLedger.map((r) => formatISO(monthEnd(r.monthYear))),
+        modelLedger.map((r) => r.endingLiquidity),
+        "lines",
+        { dash: "dot", color: dark ? CHART.modelledDark : CHART.modelledLight, width: 1.5 }
+      )
+    );
   }
 
   return {
@@ -285,10 +291,10 @@ export function periodWaterfallChart(summary: PeriodSummary): ChartFigure {
         x: labels,
         y: values,
         measure,
-        increasing: { marker: { color: "#2ecc71" } },
-        decreasing: { marker: { color: "#e74c3c" } },
-        totals: { marker: { color: "#636EFA" } },
-        connector: { line: { color: "rgba(0,0,0,0.3)" } },
+        increasing: { marker: { color: CHART.positive } },
+        decreasing: { marker: { color: CHART.negative } },
+        totals: { marker: { color: CHART.brand } },
+        connector: { line: { color: CHART.connector } },
       },
     ],
     layout: {
