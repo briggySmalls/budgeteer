@@ -92,7 +92,8 @@ function phaseBands(ledger: LedgerRow[]): PhaseBand[] {
 export function combinedMonthlyChart(
   ledger: LedgerRow[],
   actuals: LiquidityActual[] | null = null,
-  dark = false
+  dark = false,
+  modelLedger?: LedgerRow[]
 ): ChartFigure {
   const x = ledger.map((r) => {
     const d = r.monthYear;
@@ -115,7 +116,7 @@ export function combinedMonthlyChart(
       x: xEnd,
       y: ledger.map((r) => r.endingLiquidity),
       mode: "lines+markers",
-      name: "Ending Liquidity",
+      name: "Extrapolated",
       line: { color: "#636EFA", width: 2 },
       marker: { size: 5 },
     },
@@ -227,6 +228,21 @@ export function combinedMonthlyChart(
       name: "Actual Liquidity",
       marker: { symbol: "diamond", size: 8, color: dark ? "#bbb" : "#2c3e50" },
       line: { color: dark ? "#bbb" : "#2c3e50", width: 1.5 },
+    });
+  }
+
+  if (modelLedger) {
+    data.push({
+      type: "scatter",
+      x: modelLedger.map((r) => formatISO(monthEnd(r.monthYear))),
+      y: modelLedger.map((r) => r.endingLiquidity),
+      mode: "lines",
+      name: "Modelled",
+      line: {
+        dash: "dot",
+        color: dark ? "rgba(180,180,210,0.5)" : "rgba(99,110,250,0.4)",
+        width: 1.5,
+      },
     });
   }
 

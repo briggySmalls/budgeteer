@@ -9,7 +9,7 @@ import {
 } from "../engine";
 import { formatGBP } from "../format";
 import type { ParsedInputs } from "../ingest";
-import { BudgeteerError } from "../models";
+import { BudgeteerError, type LiquidityActual } from "../models";
 import { useTheme } from "../theme";
 import { PlotlyChart } from "./PlotlyChart";
 
@@ -40,6 +40,16 @@ export function Dashboard({
     () => computeLedger(timeline, phases, cashFlows, actuals.length > 0 ? actuals : null),
     [timeline, phases, cashFlows, actuals]
   );
+  const modelled = useMemo(
+    () =>
+      computeLedger(
+        timeline,
+        phases,
+        cashFlows,
+        actuals.length > 0 ? [actuals[0] as LiquidityActual] : null
+      ),
+    [timeline, phases, cashFlows, actuals]
+  );
 
   const [tab, setTab] = useState<Tab>("monthly");
   const [wfMode, setWfMode] = useState<WfMode>("phase");
@@ -57,8 +67,14 @@ export function Dashboard({
   }
 
   const monthlyFigure = useMemo(
-    () => combinedMonthlyChart(ledger, actuals.length > 0 ? actuals : null, dark),
-    [ledger, actuals, dark]
+    () =>
+      combinedMonthlyChart(
+        ledger,
+        actuals.length > 0 ? actuals : null,
+        dark,
+        actuals.length > 0 ? modelled : undefined
+      ),
+    [ledger, actuals, dark, modelled]
   );
 
   let waterfall: { summary: PeriodSummary } | { error: string };
