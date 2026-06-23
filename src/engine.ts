@@ -107,13 +107,13 @@ function anchorDate(yr: number, mon: number, d: number): Date {
   return civilDate(yr, mon, Math.min(d, last));
 }
 
-export function activeFraction(cf: AnyCashFlow, m: Date): number {
+export function activeFraction(cf: AnyCashFlow, m: Date, fromDate?: Date): number {
   if (cf instanceof OneOffCashFlow) {
     return year(m) === year(cf.date) && month(m) === month(cf.date) ? 1.0 : 0.0;
   }
 
   if (cf.frequency === Frequency.Monthly) {
-    const monthBegin = m;
+    const monthBegin = fromDate ?? m;
     const monthFinish = monthEnd(m);
     const days = intervalOverlapDays(cf.startDate, cf.endDate, monthBegin, monthFinish);
     return days / MONTHLY_PERIOD_DAYS;
@@ -126,7 +126,8 @@ export function activeFraction(cf: AnyCashFlow, m: Date): number {
   }
   const windowStart = anchorDate(year(m), anchorM, anchorD);
   const windowEnd = addDays(anchorDate(year(m) + 1, anchorM, anchorD), -1);
-  const days = intervalOverlapDays(cf.startDate, cf.endDate, windowStart, windowEnd);
+  const effectiveStart = fromDate ? maxDate(windowStart, fromDate) : windowStart;
+  const days = intervalOverlapDays(cf.startDate, cf.endDate, effectiveStart, windowEnd);
   return days / ANNUAL_PERIOD_DAYS;
 }
 
@@ -160,14 +161,21 @@ export function computeLedger(
     );
   }
 
+  let seedDate: Date | undefined;
+  if (actuals && actuals.length > 0) {
+    seedDate = latestActual(actuals).date;
+  }
+
   const rows: LedgerRow[] = [];
   for (const m of months) {
     const activePhase = findActivePhase(m, phases);
+    const fromDate =
+      seedDate && m.getTime() === monthStart(seedDate).getTime() ? seedDate : undefined;
 
     let totalInflow = 0.0;
     let totalOutflow = 0.0;
     for (const cf of flows) {
-      const f = activeFraction(cf, m);
+      const f = activeFraction(cf, m, fromDate);
       if (f <= 0) {
         continue;
       }

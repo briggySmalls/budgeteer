@@ -403,7 +403,7 @@ describe("actuals re-anchoring", () => {
     ]);
     expect(ledger).toHaveLength(4);
     expect((ledger[0] as LedgerRow).startingLiquidity).toBe(25000);
-    close(last(ledger).endingLiquidity, 25000 - (1000 * 122) / MONTHLY_PERIOD_DAYS);
+    close(last(ledger).endingLiquidity, 25000 - (1000 * (17 + 30 + 31 + 30)) / MONTHLY_PERIOD_DAYS);
   });
 
   it("filters one-offs strictly before the latest actual", () => {
