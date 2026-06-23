@@ -36,8 +36,6 @@ const CHART = {
   actualDark: "#bbb",
   modelledLight: "rgba(99,110,250,0.4)",
   modelledDark: "rgba(180,180,210,0.5)",
-  actualBand: "rgba(0, 0, 0, 0.08)",
-  actualMarker: "rgba(0, 0, 0, 0.45)",
   connector: "rgba(0,0,0,0.3)",
 } as const;
 
@@ -89,41 +87,6 @@ function verticalBand(x0: string, x1: string, fillcolor: string, line: Line = { 
     line,
     layer: "below",
   };
-}
-
-/** A full-height vertical line (paper-y) at a single x. */
-function verticalLine(x: string, line: Line): Shape {
-  return { type: "line", xref: "x", x0: x, x1: x, yref: "paper", y0: 0, y1: 1, line };
-}
-
-/** A small label anchored to the top of the plot at a given x. */
-function topLabel(x: string, text: string, xanchor: "left" | "right"): Annotation {
-  return {
-    xref: "x",
-    x,
-    yref: "paper",
-    y: 1,
-    text,
-    showarrow: false,
-    font: { size: 11 },
-    xanchor,
-    yanchor: "top",
-  };
-}
-
-/** Earliest and latest actuals by date. Assumes a non-empty array. */
-function dateExtent(actuals: LiquidityActual[]): [LiquidityActual, LiquidityActual] {
-  let earliest = actuals[0] as LiquidityActual;
-  let latest = actuals[0] as LiquidityActual;
-  for (const a of actuals) {
-    if (a.date.getTime() < earliest.date.getTime()) {
-      earliest = a;
-    }
-    if (a.date.getTime() > latest.date.getTime()) {
-      latest = a;
-    }
-  }
-  return [earliest, latest];
 }
 
 interface PhaseBand {
@@ -218,16 +181,21 @@ export function combinedMonthlyChart(
         color: border,
       })
     );
-    annotations.push(topLabel(formatISO(band.min), band.name, "left"));
+    annotations.push({
+      xref: "x",
+      x: formatISO(band.min),
+      yref: "paper",
+      y: 1 - (i % 3) * 0.06,
+      text: band.name,
+      showarrow: false,
+      font: { size: 11 },
+      xanchor: "left",
+      yanchor: "top",
+    });
   });
 
   if (actuals && actuals.length > 0) {
-    const [earliest, latest] = dateExtent(actuals);
-    const latestIso = formatISO(latest.date);
     const actualColor = dark ? CHART.actualDark : CHART.actualLight;
-    shapes.push(verticalBand(formatISO(earliest.date), latestIso, CHART.actualBand));
-    shapes.push(verticalLine(latestIso, { dash: "dash", color: CHART.actualMarker, width: 1 }));
-    annotations.push(topLabel(latestIso, "Latest actual", "right"));
     data.push(
       lineTrace(
         "Actual Liquidity",
