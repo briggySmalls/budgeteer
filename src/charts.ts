@@ -7,8 +7,9 @@
  * as layout shapes/annotations (the JS equivalent of add_vrect/add_hline/add_shape).
  */
 import { addMonths, civilDate, formatISO, month, monthEnd, year } from "./dates";
+import { computeLedger } from "./engine";
 import type { LedgerRow, PeriodSummary } from "./engine";
-import { Direction, type LiquidityActual } from "./models";
+import { type AnyCashFlow, Direction, type LiquidityActual, type Phase } from "./models";
 
 export interface ChartTrace {
   type: string;
@@ -119,11 +120,18 @@ function phaseBands(ledger: LedgerRow[]): PhaseBand[] {
 }
 
 export function combinedMonthlyChart(
-  ledger: LedgerRow[],
-  actuals: LiquidityActual[] | null = null,
-  dark = false,
-  modelLedger?: LedgerRow[]
+  timeline: Date[],
+  phases: Phase[],
+  cashFlows: AnyCashFlow[],
+  actuals: LiquidityActual[],
+  dark = false
 ): ChartFigure {
+  const ledger = computeLedger(timeline, phases, cashFlows, actuals.length > 0 ? actuals : null);
+  const modelled =
+    actuals.length > 1
+      ? computeLedger(timeline, phases, cashFlows, [actuals[0] as LiquidityActual])
+      : undefined;
+
   const xMid = ledger.map((r) => formatISO(civilDate(year(r.monthYear), month(r.monthYear), 15)));
   const xEnd = ledger.map((r) => formatISO(monthEnd(r.monthYear)));
   const barColors = ledger.map((r) => (r.netFlow >= 0 ? CHART.positive : CHART.negative));
@@ -208,12 +216,12 @@ export function combinedMonthlyChart(
     );
   }
 
-  if (modelLedger) {
+  if (modelled) {
     data.push(
       lineTrace(
         "Modelled",
-        modelLedger.map((r) => formatISO(monthEnd(r.monthYear))),
-        modelLedger.map((r) => r.endingLiquidity),
+        modelled.map((r) => formatISO(monthEnd(r.monthYear))),
+        modelled.map((r) => r.endingLiquidity),
         "lines",
         { dash: "dot", color: dark ? CHART.modelledDark : CHART.modelledLight, width: 1.5 }
       )

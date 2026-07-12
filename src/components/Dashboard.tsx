@@ -1,19 +1,14 @@
 import { useMemo, useState } from "react";
 import { combinedMonthlyChart, monthYearLabel, periodWaterfallChart } from "../charts";
 import { civilDate, formatISO } from "../dates";
-import {
-  type PeriodSummary,
-  aggregateCashflowsInPeriod,
-  buildTimeline,
-  computeLedger,
-} from "../engine";
+import { type PeriodSummary, aggregateCashflowsInPeriod, buildTimeline } from "../engine";
 import { formatGBP } from "../format";
 import type { ParsedInputs } from "../ingest";
-import { BudgeteerError, type LiquidityActual } from "../models";
+import { BudgeteerError } from "../models";
 import { useTheme } from "../theme";
 import { PlotlyChart } from "./PlotlyChart";
 
-type Tab = "monthly" | "waterfall" | "ledger";
+type Tab = "monthly" | "waterfall";
 type WfMode = "phase" | "month" | "custom";
 
 function parseIso(iso: string): Date {
@@ -36,20 +31,6 @@ export function Dashboard({
   const { theme } = useTheme();
   const dark = theme === "dark";
   const timeline = useMemo(() => buildTimeline(phases), [phases]);
-  const ledger = useMemo(
-    () => computeLedger(timeline, phases, cashFlows, actuals.length > 0 ? actuals : null),
-    [timeline, phases, cashFlows, actuals]
-  );
-  const modelled = useMemo(
-    () =>
-      computeLedger(
-        timeline,
-        phases,
-        cashFlows,
-        actuals.length > 0 ? [actuals[0] as LiquidityActual] : null
-      ),
-    [timeline, phases, cashFlows, actuals]
-  );
 
   const [tab, setTab] = useState<Tab>("monthly");
   const [wfMode, setWfMode] = useState<WfMode>("phase");
@@ -67,40 +48,35 @@ export function Dashboard({
   }
 
   const monthlyFigure = useMemo(
-    () =>
-      combinedMonthlyChart(
-        ledger,
-        actuals.length > 0 ? actuals : null,
-        dark,
-        actuals.length > 0 ? modelled : undefined
-      ),
-    [ledger, actuals, dark, modelled]
+    () => combinedMonthlyChart(timeline, phases, cashFlows, actuals, dark),
+    [timeline, phases, cashFlows, actuals, dark]
   );
 
-  let waterfall: { summary: PeriodSummary } | { error: string };
-  try {
-    let start: Date;
-    let end: Date;
-    if (wfMode === "phase") {
-      const phase = phases.find((p) => p.name === wfPhase) ?? phases[0];
-      if (!phase) {
-        throw new BudgeteerError("No phase selected");
+  const waterfall = useMemo((): { summary: PeriodSummary } | { error: string } => {
+    try {
+      let start: Date;
+      let end: Date;
+      if (wfMode === "phase") {
+        const phase = phases.find((p) => p.name === wfPhase) ?? phases[0];
+        if (!phase) {
+          throw new BudgeteerError("No phase selected");
+        }
+        start = phase.startDate;
+        end = phase.endDate;
+      } else if (wfMode === "month") {
+        start = parseIso(wfMonth);
+        end = parseIso(wfMonth);
+      } else {
+        start = parseIso(rangeFrom);
+        end = parseIso(rangeTo);
       }
-      start = phase.startDate;
-      end = phase.endDate;
-    } else if (wfMode === "month") {
-      start = parseIso(wfMonth);
-      end = parseIso(wfMonth);
-    } else {
-      start = parseIso(rangeFrom);
-      end = parseIso(rangeTo);
+      return {
+        summary: aggregateCashflowsInPeriod(cashFlows, actuals, start, end),
+      };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : String(e) };
     }
-    waterfall = {
-      summary: aggregateCashflowsInPeriod(cashFlows, actuals, start, end),
-    };
-  } catch (e) {
-    waterfall = { error: e instanceof Error ? e.message : String(e) };
-  }
+  }, [cashFlows, actuals, wfMode, wfPhase, wfMonth, rangeFrom, rangeTo, phases]);
 
   return (
     <div className="layout">
@@ -146,9 +122,6 @@ export function Dashboard({
             onClick={() => setTab("waterfall")}
           >
             Period Waterfall
-          </button>
-          <button type="button" aria-pressed={tab === "ledger"} onClick={() => setTab("ledger")}>
-            Ledger Data
           </button>
         </nav>
 
@@ -232,35 +205,6 @@ export function Dashboard({
             ) : (
               <PlotlyChart figure={periodWaterfallChart(waterfall.summary)} />
             )}
-          </section>
-        )}
-
-        {tab === "ledger" && (
-          <section>
-            <table className="ledger">
-              <thead>
-                <tr>
-                  <th>Month</th>
-                  <th>Starting</th>
-                  <th>Inflow</th>
-                  <th>Outflow</th>
-                  <th>Net</th>
-                  <th>Ending</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ledger.map((row) => (
-                  <tr key={formatISO(row.monthYear)}>
-                    <td>{monthYearLabel(row.monthYear)}</td>
-                    <td>{formatGBP(row.startingLiquidity)}</td>
-                    <td>{formatGBP(row.totalInflow)}</td>
-                    <td>{formatGBP(row.totalOutflow)}</td>
-                    <td>{formatGBP(row.netFlow)}</td>
-                    <td>{formatGBP(row.endingLiquidity)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </section>
         )}
       </main>

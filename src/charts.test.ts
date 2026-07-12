@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { combinedMonthlyChart, monthYearLabel, periodWaterfallChart } from "./charts";
 import { civilDate } from "./dates";
-import { aggregateCashflowsInPeriod, buildTimeline, computeLedger } from "./engine";
+import { aggregateCashflowsInPeriod, buildTimeline } from "./engine";
 import { Direction, Frequency, LiquidityActual, Phase, RecurringCashFlow } from "./models";
 
 const d = civilDate;
@@ -13,24 +13,26 @@ function makeLedger() {
     new RecurringCashFlow("Rent", Direction.Outflow, 1500, Frequency.Monthly),
   ];
   const timeline = buildTimeline(phases);
-  return { timeline, phases, cashFlows, ledger: computeLedger(timeline, phases, cashFlows) };
+  return { timeline, phases, cashFlows };
 }
 
 describe("combinedMonthlyChart", () => {
+  const { timeline, phases, cashFlows } = makeLedger();
+
   it("returns a figure object", () => {
-    const fig = combinedMonthlyChart(makeLedger().ledger);
+    const fig = combinedMonthlyChart(timeline, phases, cashFlows, []);
     expect(fig).toHaveProperty("data");
     expect(fig).toHaveProperty("layout");
   });
 
   it("has exactly two bar/scatter data traces (no actuals)", () => {
-    const fig = combinedMonthlyChart(makeLedger().ledger);
+    const fig = combinedMonthlyChart(timeline, phases, cashFlows, []);
     const traces = fig.data.filter((t) => t.type === "bar" || t.type === "scatter");
     expect(traces).toHaveLength(2);
   });
 
   it("keeps all traces on a single y axis", () => {
-    const fig = combinedMonthlyChart(makeLedger().ledger);
+    const fig = combinedMonthlyChart(timeline, phases, cashFlows, []);
     const yaxes = new Set(fig.data.map((t) => t.yaxis));
     for (const y of yaxes) {
       expect([undefined, "y"]).toContain(y);
@@ -38,16 +40,17 @@ describe("combinedMonthlyChart", () => {
   });
 
   it("adds an actuals trace when actuals are supplied", () => {
-    const { ledger } = makeLedger();
-    const fig = combinedMonthlyChart(ledger, [new LiquidityActual(d(2026, 2, 1), 12000)]);
+    const fig = combinedMonthlyChart(timeline, phases, cashFlows, [
+      new LiquidityActual(d(2026, 2, 1), 12000),
+    ]);
     expect(fig.data.some((t) => t.name === "Actual Liquidity")).toBe(true);
   });
 
   it("colours negative net-flow bars red and positive green", () => {
-    const phases = [new Phase("P", d(2026, 1, 1), d(2026, 2, 28))];
-    const cashFlows = [new RecurringCashFlow("Rent", Direction.Outflow, 1000, Frequency.Monthly)];
-    const ledger = computeLedger(buildTimeline(phases), phases, cashFlows);
-    const fig = combinedMonthlyChart(ledger);
+    const pPhases = [new Phase("P", d(2026, 1, 1), d(2026, 2, 28))];
+    const pCashFlows = [new RecurringCashFlow("Rent", Direction.Outflow, 1000, Frequency.Monthly)];
+    const pTimeline = buildTimeline(pPhases);
+    const fig = combinedMonthlyChart(pTimeline, pPhases, pCashFlows, []);
     const bar = fig.data.find((t) => t.type === "bar");
     const color = (bar?.marker as { color: string[] }).color;
     expect(color.every((c) => c === "#e74c3c")).toBe(true);
@@ -55,8 +58,9 @@ describe("combinedMonthlyChart", () => {
 });
 
 describe("periodWaterfallChart", () => {
+  const { cashFlows } = makeLedger();
+
   function summary(start: Date, end: Date) {
-    const { cashFlows } = makeLedger();
     return aggregateCashflowsInPeriod(cashFlows, [], start, end);
   }
 
