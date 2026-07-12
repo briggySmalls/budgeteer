@@ -116,7 +116,7 @@ export function activeFraction(cf: AnyCashFlow, m: Date, fromDate?: Date): numbe
   return cf instanceof OneOffCashFlow ? 1 : amount / cf.amount;
 }
 
-export function cashFlowAmount(cf: AnyCashFlow, start: Date, end: Date): number {
+function cashFlowAmount(cf: AnyCashFlow, start: Date, end: Date): number {
   const sign = cf.direction === Direction.Inflow ? 1 : -1;
 
   if (cf instanceof OneOffCashFlow) {
@@ -147,7 +147,7 @@ export function cashFlowAmount(cf: AnyCashFlow, start: Date, end: Date): number 
   return sign * total;
 }
 
-export function balanceAt(
+function balanceAt(
   cashFlows: AnyCashFlow[],
   date: Date,
   seedDate: Date,
