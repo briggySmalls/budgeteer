@@ -71,8 +71,8 @@ describe("periodWaterfallChart", () => {
 
   it("titles the period range", () => {
     const fig = periodWaterfallChart(summary(d(2026, 1, 1), d(2026, 6, 30)));
-    expect(fig.layout.title).toContain("Jan 2026");
-    expect(fig.layout.title).toContain("Jun 2026");
+    expect(fig.layout.title).toContain("2026-01-01");
+    expect(fig.layout.title).toContain("2026-06-30");
   });
 
   it("starts absolute and ends total", () => {
