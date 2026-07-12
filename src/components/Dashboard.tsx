@@ -2,12 +2,9 @@ import { useMemo, useState } from "react";
 import { combinedMonthlyChart, monthYearLabel, periodWaterfallChart } from "../charts";
 import { civilDate, formatISO, monthEnd, monthStart } from "../dates";
 import { type PeriodSummary, aggregateCashflowsInPeriod, buildTimeline } from "../engine";
-import { formatGBP } from "../format";
 import type { ParsedInputs } from "../ingest";
 import { BudgeteerError } from "../models";
-import type { Phase } from "../models";
-import type { AnyCashFlow } from "../models";
-import type { LiquidityActual } from "../models";
+import type { AnyCashFlow, LiquidityActual, Phase } from "../models";
 import { useTheme } from "../theme";
 import { PlotlyChart } from "./PlotlyChart";
 
@@ -213,66 +210,7 @@ function computeWaterfall(
   }
 }
 
-function DashboardSidebar({
-  phases,
-  cashFlows,
-  latestActual,
-  onRefresh,
-  onPickAnother,
-  onReset,
-}: {
-  phases: Phase[];
-  cashFlows: AnyCashFlow[];
-  latestActual: LiquidityActual | null;
-  onRefresh?: () => void;
-  onPickAnother?: () => void;
-  onReset: () => void;
-}) {
-  return (
-    <aside className="sidebar">
-      <h2>Model Summary</h2>
-      <div className="metric">
-        <span className="metric-label">Phases</span>
-        <span className="metric-value">{phases.length}</span>
-      </div>
-      <div className="metric">
-        <span className="metric-label">Cash Flows</span>
-        <span className="metric-value">{cashFlows.length}</span>
-      </div>
-      {latestActual && (
-        <div className="metric" title={`As of ${formatISO(latestActual.date)}`}>
-          <span className="metric-label">Latest Actual</span>
-          <span className="metric-value">{formatGBP(latestActual.amount)}</span>
-        </div>
-      )}
-      {onRefresh && (
-        <button type="button" className="reset" onClick={onRefresh}>
-          Refresh from Sheet
-        </button>
-      )}
-      {onPickAnother && (
-        <button type="button" className="reset" onClick={onPickAnother}>
-          Choose a different sheet
-        </button>
-      )}
-      <button type="button" className="reset" onClick={onReset}>
-        Load another source
-      </button>
-    </aside>
-  );
-}
-
-export function Dashboard({
-  inputs,
-  onReset,
-  onRefresh,
-  onPickAnother,
-}: {
-  inputs: ParsedInputs;
-  onReset: () => void;
-  onRefresh?: () => void;
-  onPickAnother?: () => void;
-}) {
+export function Dashboard({ inputs }: { inputs: ParsedInputs }) {
   const { phases, cashFlows, actuals } = inputs;
   const { theme } = useTheme();
   const dark = theme === "dark";
@@ -284,8 +222,6 @@ export function Dashboard({
   const [wfMonth, setWfMonth] = useState(formatISO(timeline[0] ?? civilDate(2026, 1, 1)));
   const [rangeFrom, setRangeFrom] = useState(formatISO(timeline[0] ?? civilDate(2026, 1, 1)));
   const [rangeTo, setRangeTo] = useState(formatISO(timeline.at(-1) ?? civilDate(2026, 1, 1)));
-
-  const latestActual = actuals.length > 0 ? actuals[actuals.length - 1] : null;
 
   function drillToMonth(iso: string) {
     setWfMonth(formatISO(parseIso(iso)));
@@ -305,55 +241,44 @@ export function Dashboard({
   );
 
   return (
-    <div className="layout">
-      <DashboardSidebar
-        phases={phases}
-        cashFlows={cashFlows}
-        latestActual={latestActual ?? null}
-        onRefresh={onRefresh}
-        onPickAnother={onPickAnother}
-        onReset={onReset}
-      />
+    <main className="content">
+      <nav className="tabs">
+        <button type="button" aria-pressed={tab === "monthly"} onClick={() => setTab("monthly")}>
+          Monthly View
+        </button>
+        <button
+          type="button"
+          aria-pressed={tab === "waterfall"}
+          onClick={() => setTab("waterfall")}
+        >
+          Period Waterfall
+        </button>
+      </nav>
 
-      <main className="content">
-        <nav className="tabs">
-          <button type="button" aria-pressed={tab === "monthly"} onClick={() => setTab("monthly")}>
-            Monthly View
-          </button>
-          <button
-            type="button"
-            aria-pressed={tab === "waterfall"}
-            onClick={() => setTab("waterfall")}
-          >
-            Period Waterfall
-          </button>
-        </nav>
+      {tab === "monthly" && (
+        <section>
+          <PlotlyChart figure={monthlyFigure} onPointClick={drillToMonth} />
+          <p className="hint">Click any bar or marker to drill into that month's waterfall.</p>
+        </section>
+      )}
 
-        {tab === "monthly" && (
-          <section>
-            <PlotlyChart figure={monthlyFigure} onPointClick={drillToMonth} />
-            <p className="hint">Click any bar or marker to drill into that month's waterfall.</p>
-          </section>
-        )}
-
-        {tab === "waterfall" && (
-          <WaterfallControls
-            waterfall={waterfall}
-            wfMode={wfMode}
-            setWfMode={setWfMode}
-            wfPhase={wfPhase}
-            setWfPhase={setWfPhase}
-            wfMonth={wfMonth}
-            setWfMonth={setWfMonth}
-            rangeFrom={rangeFrom}
-            setRangeFrom={setRangeFrom}
-            rangeTo={rangeTo}
-            setRangeTo={setRangeTo}
-            phases={phases}
-            timeline={timeline}
-          />
-        )}
-      </main>
-    </div>
+      {tab === "waterfall" && (
+        <WaterfallControls
+          waterfall={waterfall}
+          wfMode={wfMode}
+          setWfMode={setWfMode}
+          wfPhase={wfPhase}
+          setWfPhase={setWfPhase}
+          wfMonth={wfMonth}
+          setWfMonth={setWfMonth}
+          rangeFrom={rangeFrom}
+          setRangeFrom={setRangeFrom}
+          rangeTo={rangeTo}
+          setRangeTo={setRangeTo}
+          phases={phases}
+          timeline={timeline}
+        />
+      )}
+    </main>
   );
 }

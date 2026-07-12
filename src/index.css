@@ -84,50 +84,6 @@ body {
   cursor: not-allowed;
 }
 
-/* ---------- Dashboard layout ---------- */
-.layout {
-  display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: 1rem;
-  padding: 1rem 1.5rem;
-}
-
-.sidebar {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 1rem;
-  height: fit-content;
-}
-
-.sidebar h2 {
-  font-size: 1rem;
-  margin-top: 0;
-}
-
-/* ---------- Metric cards in sidebar ---------- */
-.metric {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 0.75rem;
-}
-
-.metric-label {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-}
-
-.metric-value {
-  font-size: 1.25rem;
-  font-weight: 600;
-}
-
-.reset {
-  margin-top: 1rem;
-  width: 100%;
-}
-
 /* ---------- Main content area ---------- */
 .content {
   background: var(--bg-surface);

@@ -112,15 +112,7 @@ export function App() {
       </header>
 
       {state.status === "ready" ? (
-        <Dashboard
-          inputs={state.inputs}
-          onReset={() => {
-            clearSessionToken();
-            setState({ status: "empty" });
-          }}
-          onRefresh={() => void loadSheet(state.google.token, state.google.sheetId)}
-          onPickAnother={() => void pick(state.google.token, () => {})}
-        />
+        <Dashboard inputs={state.inputs} />
       ) : (
         <div className="upload">
           <button
