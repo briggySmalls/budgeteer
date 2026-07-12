@@ -64,6 +64,7 @@ export interface PeriodSummary {
   items: PeriodItem[];
   periodStart: Date;
   periodEnd: Date;
+  startingFromActualDate: Date | null;
 }
 
 export function buildTimeline(phases: Phase[]): Date[] {
@@ -389,5 +390,7 @@ export function aggregateCashflowsInPeriod(
     items,
     periodStart,
     periodEnd,
+    startingFromActualDate:
+      actuals.length > 0 && periodStart.getTime() <= seedDate.getTime() ? seedDate : null,
   };
 }

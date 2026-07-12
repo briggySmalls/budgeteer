@@ -254,7 +254,11 @@ export function combinedMonthlyChart(
 export function periodWaterfallChart(summary: PeriodSummary): ChartFigure {
   const title = `Cashflow Waterfall — ${formatISO(summary.periodStart)} → ${formatISO(summary.periodEnd)}`;
 
-  const labels = ["Starting Liquidity"];
+  const startLabel = summary.startingFromActualDate
+    ? `Starting Liquidity (Actual: ${formatISO(summary.startingFromActualDate)})`
+    : "Starting Liquidity";
+
+  const labels = [startLabel];
   const values: number[] = [summary.startingLiquidity];
   const measure = ["absolute"];
 
