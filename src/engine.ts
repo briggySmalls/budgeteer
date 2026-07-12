@@ -27,6 +27,7 @@ import {
   type LiquidityActual,
   OneOffCashFlow,
   type Phase,
+  type RecurringCashFlow,
 } from "./models";
 
 export const MONTHLY_PERIOD_DAYS = 365.25 / 12;
@@ -181,63 +182,85 @@ function latestActual(actuals: LiquidityActual[]): LiquidityActual {
   return latest;
 }
 
+function prepareLedgerInputs(
+  timeline: Date[],
+  cashFlows: AnyCashFlow[],
+  actuals: LiquidityActual[] | null
+): {
+  months: Date[];
+  flows: AnyCashFlow[];
+  balance: number;
+  seedDate: Date | undefined;
+} {
+  if (!actuals || actuals.length === 0) {
+    return { months: timeline, flows: cashFlows, balance: 0, seedDate: undefined };
+  }
+  const latest = latestActual(actuals);
+  return {
+    months: timeline.filter((m) => m.getTime() >= monthStart(latest.date).getTime()),
+    flows: cashFlows.filter(
+      (cf) => !(cf instanceof OneOffCashFlow && cf.date.getTime() < latest.date.getTime())
+    ),
+    balance: latest.amount,
+    seedDate: latest.date,
+  };
+}
+
+function computeMonthRow(
+  m: Date,
+  phases: Phase[],
+  flows: AnyCashFlow[],
+  seedDate: Date | undefined
+): Omit<LedgerRow, "startingLiquidity" | "endingLiquidity"> {
+  const activePhase = findActivePhase(m, phases);
+  const fromDate =
+    seedDate && m.getTime() === monthStart(seedDate).getTime() ? seedDate : undefined;
+
+  let totalInflow = 0.0;
+  let totalOutflow = 0.0;
+  for (const cf of flows) {
+    const f = activeFraction(cf, m, fromDate);
+    if (f <= 0) {
+      continue;
+    }
+    if (cf.direction === Direction.Inflow) {
+      totalInflow += cf.amount * f;
+    } else {
+      totalOutflow += cf.amount * f;
+    }
+  }
+
+  return {
+    monthYear: m,
+    activePhase,
+    totalInflow,
+    totalOutflow,
+    netFlow: totalInflow - totalOutflow,
+  };
+}
+
 export function computeLedger(
   timeline: Date[],
   phases: Phase[],
   cashFlows: AnyCashFlow[],
   actuals: LiquidityActual[] | null = null
 ): LedgerRow[] {
-  let months = timeline;
-  let flows = cashFlows;
-  let balance = 0.0;
-
-  if (actuals && actuals.length > 0) {
-    const latest = latestActual(actuals);
-    const latestMonth = monthStart(latest.date);
-    months = timeline.filter((m) => m.getTime() >= latestMonth.getTime());
-    balance = latest.amount;
-    flows = cashFlows.filter(
-      (cf) => !(cf instanceof OneOffCashFlow && cf.date.getTime() < latest.date.getTime())
-    );
-  }
-
-  let seedDate: Date | undefined;
-  if (actuals && actuals.length > 0) {
-    seedDate = latestActual(actuals).date;
-  }
+  const { months, flows, balance: seed, seedDate } = prepareLedgerInputs(
+    timeline,
+    cashFlows,
+    actuals
+  );
+  let balance = seed;
 
   const rows: LedgerRow[] = [];
   for (const m of months) {
-    const activePhase = findActivePhase(m, phases);
-    const fromDate =
-      seedDate && m.getTime() === monthStart(seedDate).getTime() ? seedDate : undefined;
-
-    let totalInflow = 0.0;
-    let totalOutflow = 0.0;
-    for (const cf of flows) {
-      const f = activeFraction(cf, m, fromDate);
-      if (f <= 0) {
-        continue;
-      }
-      if (cf.direction === Direction.Inflow) {
-        totalInflow += cf.amount * f;
-      } else {
-        totalOutflow += cf.amount * f;
-      }
-    }
-
-    const netFlow = totalInflow - totalOutflow;
-    const ending = balance + netFlow;
+    const row = computeMonthRow(m, phases, flows, seedDate);
     rows.push({
-      monthYear: m,
-      activePhase,
+      ...row,
       startingLiquidity: balance,
-      totalInflow,
-      totalOutflow,
-      netFlow,
-      endingLiquidity: ending,
+      endingLiquidity: balance + row.netFlow,
     });
-    balance = ending;
+    balance += row.netFlow;
   }
 
   return rows;
