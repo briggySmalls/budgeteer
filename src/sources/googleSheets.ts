@@ -31,6 +31,34 @@ function sheetNameOf(range: string): string {
   return name.replace(/^'(.*)'$/, "$1").replace(/''/g, "'");
 }
 
+function buildParams(): URLSearchParams {
+  const params = new URLSearchParams();
+  for (const name of SHEET_NAMES) {
+    params.append("ranges", name);
+  }
+  params.set("valueRenderOption", "UNFORMATTED_VALUE");
+  params.set("dateTimeRenderOption", "SERIAL_NUMBER");
+  return params;
+}
+
+function buildSheetMap(body: BatchGetResponse): Map<string, Cell[][]> {
+  const byName = new Map<string, Cell[][]>();
+  for (const vr of body.valueRanges ?? []) {
+    if (vr.range) {
+      byName.set(sheetNameOf(vr.range), vr.values ?? []);
+    }
+  }
+  return byName;
+}
+
+function buildSheets(byName: Map<string, Cell[][]>): SheetSet {
+  const sheets: SheetSet = {};
+  for (const name of SHEET_NAMES) {
+    sheets[name] = rowsWithDates(name, byName.get(name) ?? []);
+  }
+  return sheets;
+}
+
 /**
  * Reads the four model sheets from a Google Sheet via the Sheets API
  * (values:batchGet). UNFORMATTED_VALUE returns the computed result of formula
@@ -46,12 +74,7 @@ export class GoogleSheetsSource implements DataSource {
     const { spreadsheetId, accessToken } = this.config;
     const doFetch: FetchLike = this.config.fetchImpl ?? fetch;
 
-    const params = new URLSearchParams();
-    for (const name of SHEET_NAMES) {
-      params.append("ranges", name);
-    }
-    params.set("valueRenderOption", "UNFORMATTED_VALUE");
-    params.set("dateTimeRenderOption", "SERIAL_NUMBER");
+    const params = buildParams();
     const url = `${SHEETS_API}/${encodeURIComponent(spreadsheetId)}/values:batchGet?${params}`;
 
     const res = await doFetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -63,17 +86,6 @@ export class GoogleSheetsSource implements DataSource {
     }
 
     const body = (await res.json()) as BatchGetResponse;
-    const byName = new Map<string, Cell[][]>();
-    for (const vr of body.valueRanges ?? []) {
-      if (vr.range) {
-        byName.set(sheetNameOf(vr.range), vr.values ?? []);
-      }
-    }
-
-    const sheets: SheetSet = {};
-    for (const name of SHEET_NAMES) {
-      sheets[name] = rowsWithDates(name, byName.get(name) ?? []);
-    }
-    return sheets;
+    return buildSheets(buildSheetMap(body));
   }
 }

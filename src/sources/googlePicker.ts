@@ -2,26 +2,44 @@ const GAPI_SRC = "https://apis.google.com/js/api.js";
 
 let pickerLoad: Promise<void> | null = null;
 
-/** Load the gapi loader once, then the Picker module. */
+function appendGapiScript(resolve: () => void, reject: (err: Error) => void): void {
+  const script = document.createElement("script");
+  script.src = GAPI_SRC;
+  script.async = true;
+  script.defer = true;
+  script.onload = () => gapi.load("picker", resolve);
+  script.onerror = () => reject(new Error("Failed to load the Google Picker API"));
+  document.head.appendChild(script);
+}
+
 function loadPickerApi(): Promise<void> {
   if (pickerLoad) {
     return pickerLoad;
   }
+  const hasExistingScript =
+    document.querySelector(`script[src="${GAPI_SRC}"]`) !== null && typeof gapi !== "undefined";
+  if (hasExistingScript) {
+    pickerLoad = new Promise<void>((resolve) => {
+      gapi.load("picker", resolve);
+    });
+    return pickerLoad;
+  }
   pickerLoad = new Promise<void>((resolve, reject) => {
-    const loadPicker = () => gapi.load("picker", () => resolve());
-    if (document.querySelector(`script[src="${GAPI_SRC}"]`) && typeof gapi !== "undefined") {
-      loadPicker();
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = GAPI_SRC;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => loadPicker();
-    script.onerror = () => reject(new Error("Failed to load the Google Picker API"));
-    document.head.appendChild(script);
+    appendGapiScript(resolve, reject);
   });
   return pickerLoad;
+}
+
+function onPickerResult(
+  data: GooglePickerResponse,
+  resolve: (value: PickedSheet | null) => void
+): void {
+  if (data.action === google.picker.Action.PICKED) {
+    const doc = data.docs?.[0];
+    resolve(doc ? { id: doc.id, name: doc.name } : null);
+  } else if (data.action === google.picker.Action.CANCEL) {
+    resolve(null);
+  }
 }
 
 interface PickedSheet {
@@ -47,14 +65,7 @@ export async function pickSpreadsheet(
       .addView(view)
       .setOAuthToken(accessToken)
       .setDeveloperKey(apiKey)
-      .setCallback((data) => {
-        if (data.action === google.picker.Action.PICKED) {
-          const doc = data.docs?.[0];
-          resolve(doc ? { id: doc.id, name: doc.name } : null);
-        } else if (data.action === google.picker.Action.CANCEL) {
-          resolve(null);
-        }
-      })
+      .setCallback((data) => onPickerResult(data, resolve))
       .build();
     picker.setVisible(true);
   });

@@ -117,11 +117,7 @@ export function activeFraction(cf: AnyCashFlow, m: Date, fromDate?: Date): numbe
   return cf instanceof OneOffCashFlow ? 1 : amount / cf.amount;
 }
 
-function annualLumpAmount(
-  cf: RecurringCashFlow,
-  start: Date,
-  end: Date
-): number {
+function annualLumpAmount(cf: RecurringCashFlow, start: Date, end: Date): number {
   const anchorM = cf.startDate ? month(cf.startDate) : 1;
   const anchorD = cf.startDate ? day(cf.startDate) : 1;
   let total = 0;
@@ -245,11 +241,12 @@ export function computeLedger(
   cashFlows: AnyCashFlow[],
   actuals: LiquidityActual[] | null = null
 ): LedgerRow[] {
-  const { months, flows, balance: seed, seedDate } = prepareLedgerInputs(
-    timeline,
-    cashFlows,
-    actuals
-  );
+  const {
+    months,
+    flows,
+    balance: seed,
+    seedDate,
+  } = prepareLedgerInputs(timeline, cashFlows, actuals);
   let balance = seed;
 
   const rows: LedgerRow[] = [];

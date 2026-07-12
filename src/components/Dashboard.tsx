@@ -298,7 +298,8 @@ export function Dashboard({
   );
 
   const waterfall = useMemo(
-    () => computeWaterfall(cashFlows, actuals, phases, wfMode, wfPhase, wfMonth, rangeFrom, rangeTo),
+    () =>
+      computeWaterfall(cashFlows, actuals, phases, wfMode, wfPhase, wfMonth, rangeFrom, rangeTo),
     [cashFlows, actuals, phases, wfMode, wfPhase, wfMonth, rangeFrom, rangeTo]
   );
 

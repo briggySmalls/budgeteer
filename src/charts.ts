@@ -96,24 +96,32 @@ interface PhaseBand {
   max: Date;
 }
 
+function upsertBand(
+  bands: Map<string, PhaseBand>,
+  order: string[],
+  name: string,
+  date: Date
+): void {
+  const existing = bands.get(name);
+  if (!existing) {
+    bands.set(name, { name, min: date, max: date });
+    order.push(name);
+    return;
+  }
+  if (date.getTime() < existing.min.getTime()) {
+    existing.min = date;
+  }
+  if (date.getTime() > existing.max.getTime()) {
+    existing.max = date;
+  }
+}
+
 function phaseBands(ledger: LedgerRow[]): PhaseBand[] {
   const bands = new Map<string, PhaseBand>();
   const order: string[] = [];
   for (const row of ledger) {
-    if (row.activePhase === null) {
-      continue;
-    }
-    const existing = bands.get(row.activePhase);
-    if (existing) {
-      if (row.monthYear.getTime() < existing.min.getTime()) {
-        existing.min = row.monthYear;
-      }
-      if (row.monthYear.getTime() > existing.max.getTime()) {
-        existing.max = row.monthYear;
-      }
-    } else {
-      bands.set(row.activePhase, { name: row.activePhase, min: row.monthYear, max: row.monthYear });
-      order.push(row.activePhase);
+    if (row.activePhase !== null) {
+      upsertBand(bands, order, row.activePhase, row.monthYear);
     }
   }
   return order.map((name) => bands.get(name) as PhaseBand);
