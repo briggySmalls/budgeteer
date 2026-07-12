@@ -116,20 +116,11 @@ export function activeFraction(cf: AnyCashFlow, m: Date, fromDate?: Date): numbe
   return cf instanceof OneOffCashFlow ? 1 : amount / cf.amount;
 }
 
-function cashFlowAmount(cf: AnyCashFlow, start: Date, end: Date): number {
-  const sign = cf.direction === Direction.Inflow ? 1 : -1;
-
-  if (cf instanceof OneOffCashFlow) {
-    return cf.date.getTime() >= start.getTime() && cf.date.getTime() <= end.getTime()
-      ? sign * cf.amount
-      : 0;
-  }
-
-  if (cf.frequency === Frequency.Monthly) {
-    const days = intervalOverlapDays(cf.startDate, cf.endDate, start, end);
-    return sign * cf.amount * (days / MONTHLY_PERIOD_DAYS);
-  }
-
+function annualLumpAmount(
+  cf: RecurringCashFlow,
+  start: Date,
+  end: Date
+): number {
   const anchorM = cf.startDate ? month(cf.startDate) : 1;
   const anchorD = cf.startDate ? day(cf.startDate) : 1;
   let total = 0;
@@ -144,7 +135,24 @@ function cashFlowAmount(cf: AnyCashFlow, start: Date, end: Date): number {
       total += cf.amount;
     }
   }
-  return sign * total;
+  return total;
+}
+
+function cashFlowAmount(cf: AnyCashFlow, start: Date, end: Date): number {
+  const sign = cf.direction === Direction.Inflow ? 1 : -1;
+
+  if (cf instanceof OneOffCashFlow) {
+    return cf.date.getTime() >= start.getTime() && cf.date.getTime() <= end.getTime()
+      ? sign * cf.amount
+      : 0;
+  }
+
+  if (cf.frequency === Frequency.Monthly) {
+    const days = intervalOverlapDays(cf.startDate, cf.endDate, start, end);
+    return sign * cf.amount * (days / MONTHLY_PERIOD_DAYS);
+  }
+
+  return sign * annualLumpAmount(cf, start, end);
 }
 
 function balanceAt(
