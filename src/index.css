@@ -268,3 +268,58 @@ body {
 .ledger td:first-child {
   text-align: left;
 }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 768px) {
+  .app-header {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .app-header h1 {
+    font-size: 1rem;
+  }
+
+  .content {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    padding: 0.5rem;
+  }
+
+  .tabs {
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .wf-mode {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .wf-mode legend {
+    width: 100%;
+  }
+
+  .wf-mode label {
+    margin-right: 0;
+  }
+
+  .range {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .field {
+    max-width: 100%;
+  }
+
+  .upload {
+    padding: 2rem 1rem;
+  }
+
+  .menu-tray {
+    width: 100%;
+    max-width: 100%;
+  }
+}
