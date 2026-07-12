@@ -14,6 +14,12 @@
     "rules": {
       "recommended": true,
       "a11y": { "recommended": true },
+      "complexity": {
+        "noExcessiveCognitiveComplexity": {
+          "level": "error",
+          "options": { "maxAllowedComplexity": 9 }
+        }
+      },
       "suspicious": { "noExplicitAny": "warn" }
     }
   },
