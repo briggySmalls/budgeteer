@@ -56,8 +56,8 @@ describe("combinedMonthlyChart", () => {
 
 describe("periodWaterfallChart", () => {
   function summary(start: Date, end: Date) {
-    const { timeline, phases, cashFlows } = makeLedger();
-    return aggregateCashflowsInPeriod(timeline, phases, cashFlows, start, end);
+    const { cashFlows } = makeLedger();
+    return aggregateCashflowsInPeriod(cashFlows, [], start, end);
   }
 
   it("returns a figure object", () => {

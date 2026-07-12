@@ -272,10 +272,6 @@ describe("phase gap", () => {
 
 describe("aggregateCashflowsInPeriod", () => {
   function setup() {
-    const phases = [
-      new Phase("Working", d(2026, 1, 1), d(2026, 6, 30)),
-      new Phase("Break", d(2026, 7, 1), d(2026, 12, 31)),
-    ];
     const cashFlows: AnyCashFlow[] = [
       new RecurringCashFlow(
         "Salary",
@@ -288,18 +284,12 @@ describe("aggregateCashflowsInPeriod", () => {
       new RecurringCashFlow("Rent", Direction.Outflow, 1200, Frequency.Monthly),
       new OneOffCashFlow("Bonus", Direction.Inflow, 3000, d(2026, 3, 1)),
     ];
-    return { timeline: buildTimeline(phases), phases, cashFlows };
+    return { cashFlows };
   }
 
   it("phase-aligned period", () => {
-    const { timeline, phases, cashFlows } = setup();
-    const result = aggregateCashflowsInPeriod(
-      timeline,
-      phases,
-      cashFlows,
-      d(2026, 1, 1),
-      d(2026, 6, 30)
-    );
+    const { cashFlows } = setup();
+    const result = aggregateCashflowsInPeriod(cashFlows, [], d(2026, 1, 1), d(2026, 6, 30));
     const byName = Object.fromEntries(result.items.map((it) => [it.name, it]));
     close((byName.Salary as { amount: number }).amount, (5000 * 181) / MONTHLY_PERIOD_DAYS);
     close((byName.Rent as { amount: number }).amount, (1200 * 181) / MONTHLY_PERIOD_DAYS);
@@ -307,14 +297,8 @@ describe("aggregateCashflowsInPeriod", () => {
   });
 
   it("single month", () => {
-    const { timeline, phases, cashFlows } = setup();
-    const result = aggregateCashflowsInPeriod(
-      timeline,
-      phases,
-      cashFlows,
-      d(2026, 3, 1),
-      d(2026, 3, 31)
-    );
+    const { cashFlows } = setup();
+    const result = aggregateCashflowsInPeriod(cashFlows, [], d(2026, 3, 1), d(2026, 3, 31));
     const byName = Object.fromEntries(result.items.map((it) => [it.name, it]));
     close((byName.Salary as { amount: number }).amount, (5000 * 31) / MONTHLY_PERIOD_DAYS);
     close((byName.Rent as { amount: number }).amount, (1200 * 31) / MONTHLY_PERIOD_DAYS);
@@ -322,43 +306,15 @@ describe("aggregateCashflowsInPeriod", () => {
   });
 
   it("period with no cash flows returns empty items", () => {
-    const phases = [new Phase("Quiet", d(2026, 1, 1), d(2026, 3, 31))];
-    const result = aggregateCashflowsInPeriod(
-      buildTimeline(phases),
-      phases,
-      [],
-      d(2026, 1, 1),
-      d(2026, 3, 31)
-    );
+    const result = aggregateCashflowsInPeriod([], [], d(2026, 1, 1), d(2026, 3, 31));
     expect(result.items).toEqual([]);
     expect(result.startingLiquidity).toBe(0);
     expect(result.endingLiquidity).toBe(0);
   });
 
-  it("starting/ending liquidity match the ledger", () => {
-    const { timeline, phases, cashFlows } = setup();
-    const ledger = computeLedger(timeline, phases, cashFlows);
-    const result = aggregateCashflowsInPeriod(
-      timeline,
-      phases,
-      cashFlows,
-      d(2026, 3, 1),
-      d(2026, 3, 1)
-    );
-    const mar = monthRow(ledger, d(2026, 3, 1));
-    expect(result.startingLiquidity).toBe(mar.startingLiquidity);
-    expect(result.endingLiquidity).toBe(mar.endingLiquidity);
-  });
-
   it("orders inflows before outflows", () => {
-    const { timeline, phases, cashFlows } = setup();
-    const result = aggregateCashflowsInPeriod(
-      timeline,
-      phases,
-      cashFlows,
-      d(2026, 1, 1),
-      d(2026, 6, 30)
-    );
+    const { cashFlows } = setup();
+    const result = aggregateCashflowsInPeriod(cashFlows, [], d(2026, 1, 1), d(2026, 6, 30));
     const directions = result.items.map((it) => it.direction);
     const lastInflow = directions.lastIndexOf(Direction.Inflow);
     const firstOutflow = directions.indexOf(Direction.Outflow);
@@ -367,18 +323,11 @@ describe("aggregateCashflowsInPeriod", () => {
     }
   });
 
-  it("raises when the period is outside the timeline", () => {
-    const { timeline, phases, cashFlows } = setup();
-    expect(() =>
-      aggregateCashflowsInPeriod(timeline, phases, cashFlows, d(2030, 1, 1), d(2030, 6, 30))
-    ).toThrow(EngineError);
-  });
-
   it("raises when end is before start", () => {
-    const { timeline, phases, cashFlows } = setup();
-    expect(() =>
-      aggregateCashflowsInPeriod(timeline, phases, cashFlows, d(2026, 6, 1), d(2026, 1, 1))
-    ).toThrow(EngineError);
+    const { cashFlows } = setup();
+    expect(() => aggregateCashflowsInPeriod(cashFlows, [], d(2026, 6, 1), d(2026, 1, 1))).toThrow(
+      EngineError
+    );
   });
 });
 

@@ -6,6 +6,7 @@
  * fraction of an "average" month/year they are active, using inclusive day counts.
  */
 import {
+  addDays,
   civilDate,
   day,
   daysInMonth,
@@ -146,6 +147,22 @@ export function cashFlowAmount(cf: AnyCashFlow, start: Date, end: Date): number 
   return sign * total;
 }
 
+export function balanceAt(
+  cashFlows: AnyCashFlow[],
+  date: Date,
+  seedDate: Date,
+  seedBalance: number
+): number {
+  if (date.getTime() < seedDate.getTime()) {
+    return seedBalance;
+  }
+  let balance = seedBalance;
+  for (const cf of cashFlows) {
+    balance += cashFlowAmount(cf, seedDate, date);
+  }
+  return balance;
+}
+
 function latestActual(actuals: LiquidityActual[]): LiquidityActual {
   let latest = actuals[0] as LiquidityActual;
   for (const a of actuals) {
@@ -251,12 +268,10 @@ export function aggregateByPhase(ledger: LedgerRow[]): PhaseSummary[] {
 }
 
 export function aggregateCashflowsInPeriod(
-  timeline: Date[],
-  phases: Phase[],
   cashFlows: AnyCashFlow[],
+  actuals: LiquidityActual[],
   periodStart: Date,
-  periodEnd: Date,
-  actuals: LiquidityActual[] | null = null
+  periodEnd: Date
 ): PeriodSummary {
   if (periodEnd.getTime() < periodStart.getTime()) {
     throw new EngineError(
@@ -266,43 +281,38 @@ export function aggregateCashflowsInPeriod(
     );
   }
 
-  const ledger = computeLedger(timeline, phases, cashFlows, actuals);
-  const startMonth = monthStart(periodStart);
-  const endMonth = monthStart(periodEnd);
+  let flows: AnyCashFlow[];
+  let seedDate: Date;
+  let seedBalance: number;
 
-  const inPeriod = ledger.filter(
-    (r) =>
-      r.monthYear.getTime() >= startMonth.getTime() && r.monthYear.getTime() <= endMonth.getTime()
-  );
-  if (inPeriod.length === 0) {
-    throw new EngineError(
-      `Period [${periodStart.toISOString().slice(0, 10)}, ${periodEnd
-        .toISOString()
-        .slice(0, 10)}] does not overlap the forecast timeline`
+  if (actuals.length > 0) {
+    const latest = latestActual(actuals);
+    seedDate = latest.date;
+    seedBalance = latest.amount;
+    flows = cashFlows.filter(
+      (cf) => !(cf instanceof OneOffCashFlow && cf.date.getTime() < latest.date.getTime())
     );
+  } else {
+    seedDate = periodStart;
+    seedBalance = 0;
+    flows = cashFlows;
   }
 
-  const startingLiquidity = (inPeriod[0] as LedgerRow).startingLiquidity;
-  const endingLiquidity = (inPeriod.at(-1) as LedgerRow).endingLiquidity;
-
-  const months = timeline.filter(
-    (m) => m.getTime() >= startMonth.getTime() && m.getTime() <= endMonth.getTime()
-  );
+  const beforeStart = addDays(periodStart, -1);
+  const startingLiquidity = balanceAt(flows, beforeStart, seedDate, seedBalance);
 
   const totals = new Map<string, PeriodItem>();
-  for (const cf of cashFlows) {
-    let amount = 0;
-    for (const m of months) {
-      amount += cf.amount * activeFraction(cf, m);
-    }
+  for (const cf of flows) {
+    const amount = cashFlowAmount(cf, periodStart, periodEnd);
     if (amount === 0) {
       continue;
     }
+    const absAmount = Math.abs(amount);
     const existing = totals.get(cf.name);
     if (existing) {
-      existing.amount += amount;
+      existing.amount += absAmount;
     } else {
-      totals.set(cf.name, { name: cf.name, direction: cf.direction, amount });
+      totals.set(cf.name, { name: cf.name, direction: cf.direction, amount: absAmount });
     }
   }
 
@@ -315,11 +325,17 @@ export function aggregateCashflowsInPeriod(
     return b.amount - a.amount;
   });
 
+  const netItems = items.reduce(
+    (s, i) => s + (i.direction === Direction.Inflow ? i.amount : -i.amount),
+    0
+  );
+  const endingLiquidity = startingLiquidity + netItems;
+
   return {
     startingLiquidity,
     endingLiquidity,
     items,
-    periodStart: startMonth,
-    periodEnd: endMonth,
+    periodStart,
+    periodEnd,
   };
 }

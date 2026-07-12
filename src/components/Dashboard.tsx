@@ -96,7 +96,7 @@ export function Dashboard({
       end = parseIso(rangeTo);
     }
     waterfall = {
-      summary: aggregateCashflowsInPeriod(timeline, phases, cashFlows, start, end, actuals),
+      summary: aggregateCashflowsInPeriod(cashFlows, actuals, start, end),
     };
   } catch (e) {
     waterfall = { error: e instanceof Error ? e.message : String(e) };
