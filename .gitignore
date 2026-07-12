@@ -5,4 +5,5 @@ coverage
 .DS_Store
 
 # Personal model files — never commit (contains real financial data).
-*.ods
+*.ods.env
+budgeteer.xlsx
