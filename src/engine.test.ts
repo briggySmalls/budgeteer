@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { civilDate } from "./dates";
 import {
-  ANNUAL_PERIOD_DAYS,
   type LedgerRow,
   MONTHLY_PERIOD_DAYS,
   activeFraction,
@@ -108,37 +107,37 @@ describe("monthly prorating", () => {
   });
 });
 
-describe("annual prorating", () => {
-  it("full year, anchored to March", () => {
+describe("annual lump activation", () => {
+  it("fires in anchor month only", () => {
     const cf = annually("X", -12000, d(2026, 3, 15));
     expect(activeFraction(cf, d(2026, 4, 1))).toBe(0);
     expect(activeFraction(cf, d(2026, 1, 1))).toBe(0);
-    close(activeFraction(cf, d(2026, 3, 1)), 365 / ANNUAL_PERIOD_DAYS);
-    close(activeFraction(cf, d(2027, 3, 1)), 366 / ANNUAL_PERIOD_DAYS);
+    expect(activeFraction(cf, d(2026, 3, 1))).toBe(1);
+    expect(activeFraction(cf, d(2027, 3, 1))).toBe(1);
   });
 
-  it("partial year truncated by end date", () => {
+  it("fires if anchor date is within the lifespan", () => {
     const cf = annually("X", -12000, d(2026, 3, 15), d(2026, 9, 15));
-    close(activeFraction(cf, d(2026, 3, 1)), 185 / ANNUAL_PERIOD_DAYS);
+    expect(activeFraction(cf, d(2026, 3, 1))).toBe(1);
     expect(activeFraction(cf, d(2027, 3, 1))).toBe(0);
   });
 
-  it("partial year, anchor not January", () => {
+  it("anchor not in January", () => {
     const cf = annually("X", -12000, d(2026, 8, 1), d(2027, 2, 1));
-    close(activeFraction(cf, d(2026, 8, 1)), 185 / ANNUAL_PERIOD_DAYS);
+    expect(activeFraction(cf, d(2026, 8, 1))).toBe(1);
     expect(activeFraction(cf, d(2027, 8, 1))).toBe(0);
   });
 
-  it("no start date defaults to January", () => {
+  it("no start date defaults to January, constrained by end date", () => {
     const cf = annually("X", -12000, null, d(2026, 6, 30));
-    close(activeFraction(cf, d(2026, 1, 1)), 181 / ANNUAL_PERIOD_DAYS);
+    expect(activeFraction(cf, d(2026, 1, 1))).toBe(1);
     expect(activeFraction(cf, d(2026, 6, 1))).toBe(0);
   });
 
   it("leap-day anchor clamps without crashing", () => {
     const cf = annually("X", -12000, d(2024, 2, 29));
-    expect(activeFraction(cf, d(2024, 2, 1))).toBeGreaterThan(0.9);
-    expect(activeFraction(cf, d(2025, 2, 1))).toBeGreaterThan(0.9);
+    expect(activeFraction(cf, d(2024, 2, 1))).toBe(1);
+    expect(activeFraction(cf, d(2025, 2, 1))).toBe(1);
   });
 });
 
@@ -174,9 +173,9 @@ describe("template scenario (penny-exact parity)", () => {
 
     const agg = aggregateByPhase(ledger);
     const expected = [
-      { phase: "Current Job", months: 6, start: 50_000.0, net: 14_432.85, end: 64_432.85 },
-      { phase: "Career Break", months: 3, start: 64_432.85, net: -10_096.51, end: 54_336.34 },
-      { phase: "New Role", months: 9, start: 54_336.34, net: 40_840.66, end: 95_177.0 },
+      { phase: "Current Job", months: 6, start: 50_000.0, net: 14_432.03, end: 64_432.03 },
+      { phase: "Career Break", months: 3, start: 64_432.03, net: -10_096.51, end: 54_335.52 },
+      { phase: "New Role", months: 9, start: 54_335.52, net: 40_843.12, end: 95_178.64 },
     ];
     expect(agg).toHaveLength(3);
     expected.forEach((e, i) => {
@@ -228,7 +227,7 @@ describe("annual frequency firing", () => {
     const firing = ledger.filter((r) => r.totalOutflow > 0);
     expect(firing).toHaveLength(3);
     expect(firing.every((r) => r.monthYear.getUTCMonth() + 1 === 3)).toBe(true);
-    close(last(ledger).endingLiquidity, (-600 * (365 + 366 + 365)) / ANNUAL_PERIOD_DAYS);
+    close(last(ledger).endingLiquidity, -1800);
   });
 });
 

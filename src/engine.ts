@@ -6,7 +6,6 @@
  * fraction of an "average" month/year they are active, using inclusive day counts.
  */
 import {
-  addDays,
   civilDate,
   day,
   daysInMonth,
@@ -30,7 +29,6 @@ import {
 } from "./models";
 
 export const MONTHLY_PERIOD_DAYS = 365.25 / 12;
-export const ANNUAL_PERIOD_DAYS = 365.25;
 
 export interface LedgerRow {
   monthYear: Date;
@@ -108,27 +106,44 @@ function anchorDate(yr: number, mon: number, d: number): Date {
 }
 
 export function activeFraction(cf: AnyCashFlow, m: Date, fromDate?: Date): number {
+  const start = fromDate ?? m;
+  const end = monthEnd(m);
+  const amount = Math.abs(cashFlowAmount(cf, start, end));
+  if (amount === 0) {
+    return 0;
+  }
+  return cf instanceof OneOffCashFlow ? 1 : amount / cf.amount;
+}
+
+export function cashFlowAmount(cf: AnyCashFlow, start: Date, end: Date): number {
+  const sign = cf.direction === Direction.Inflow ? 1 : -1;
+
   if (cf instanceof OneOffCashFlow) {
-    return year(m) === year(cf.date) && month(m) === month(cf.date) ? 1.0 : 0.0;
+    return cf.date.getTime() >= start.getTime() && cf.date.getTime() <= end.getTime()
+      ? sign * cf.amount
+      : 0;
   }
 
   if (cf.frequency === Frequency.Monthly) {
-    const monthBegin = fromDate ?? m;
-    const monthFinish = monthEnd(m);
-    const days = intervalOverlapDays(cf.startDate, cf.endDate, monthBegin, monthFinish);
-    return days / MONTHLY_PERIOD_DAYS;
+    const days = intervalOverlapDays(cf.startDate, cf.endDate, start, end);
+    return sign * cf.amount * (days / MONTHLY_PERIOD_DAYS);
   }
 
   const anchorM = cf.startDate ? month(cf.startDate) : 1;
   const anchorD = cf.startDate ? day(cf.startDate) : 1;
-  if (month(m) !== anchorM) {
-    return 0.0;
+  let total = 0;
+  for (let yr = year(start); yr <= year(end); yr++) {
+    const anchor = anchorDate(yr, anchorM, anchorD);
+    if (
+      anchor.getTime() >= start.getTime() &&
+      anchor.getTime() <= end.getTime() &&
+      (!cf.startDate || anchor.getTime() >= cf.startDate.getTime()) &&
+      (!cf.endDate || anchor.getTime() <= cf.endDate.getTime())
+    ) {
+      total += cf.amount;
+    }
   }
-  const windowStart = anchorDate(year(m), anchorM, anchorD);
-  const windowEnd = addDays(anchorDate(year(m) + 1, anchorM, anchorD), -1);
-  const effectiveStart = fromDate ? maxDate(windowStart, fromDate) : windowStart;
-  const days = intervalOverlapDays(cf.startDate, cf.endDate, effectiveStart, windowEnd);
-  return days / ANNUAL_PERIOD_DAYS;
+  return sign * total;
 }
 
 function latestActual(actuals: LiquidityActual[]): LiquidityActual {
