@@ -374,7 +374,9 @@ export function aggregateCashflowsInPeriod(
   }
 
   const startingLiquidity = balanceAt(flows, addDays(periodStart, -1), seedDate, seedBalance);
-  const items = computeItems(flows, periodStart, periodEnd);
+  const itemStart =
+    actuals.length > 0 && periodStart.getTime() < seedDate.getTime() ? seedDate : periodStart;
+  const items = computeItems(flows, itemStart, periodEnd);
 
   const netItems = items.reduce(
     (s, i) => s + (i.direction === Direction.Inflow ? i.amount : -i.amount),
