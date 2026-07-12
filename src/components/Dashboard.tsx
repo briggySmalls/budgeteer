@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { combinedMonthlyChart, monthYearLabel, periodWaterfallChart } from "../charts";
-import { civilDate, formatISO } from "../dates";
+import { civilDate, formatISO, monthEnd, monthStart } from "../dates";
 import { type PeriodSummary, aggregateCashflowsInPeriod, buildTimeline } from "../engine";
 import { formatGBP } from "../format";
 import type { ParsedInputs } from "../ingest";
@@ -198,8 +198,9 @@ function computeWaterfall(
       start = phase.startDate;
       end = phase.endDate;
     } else if (wfMode === "month") {
-      start = parseIso(wfMonth);
-      end = parseIso(wfMonth);
+      const d = parseIso(wfMonth);
+      start = monthStart(d);
+      end = monthEnd(d);
     } else {
       start = parseIso(rangeFrom);
       end = parseIso(rangeTo);
