@@ -275,6 +275,52 @@ export function aggregateByPhase(ledger: LedgerRow[]): PhaseSummary[] {
   });
 }
 
+function computeItems(flows: AnyCashFlow[], periodStart: Date, periodEnd: Date): PeriodItem[] {
+  const totals = new Map<string, PeriodItem>();
+  for (const cf of flows) {
+    const amount = cashFlowAmount(cf, periodStart, periodEnd);
+    if (amount === 0) {
+      continue;
+    }
+    const absAmount = Math.abs(amount);
+    const existing = totals.get(cf.name);
+    if (existing) {
+      existing.amount += absAmount;
+    } else {
+      totals.set(cf.name, { name: cf.name, direction: cf.direction, amount: absAmount });
+    }
+  }
+  return [...totals.values()].sort((a, b) => {
+    const ai = a.direction === Direction.Inflow ? 0 : 1;
+    const bi = b.direction === Direction.Inflow ? 0 : 1;
+    if (ai !== bi) {
+      return ai - bi;
+    }
+    return b.amount - a.amount;
+  });
+}
+
+function checkInvariant(
+  items: PeriodItem[],
+  startingLiquidity: number,
+  endingLiquidity: number,
+  periodStart: Date,
+  periodEnd: Date
+): void {
+  const netItems = items.reduce(
+    (s, i) => s + (i.direction === Direction.Inflow ? i.amount : -i.amount),
+    0
+  );
+  const netLedger = endingLiquidity - startingLiquidity;
+  if (Math.abs(netItems - netLedger) > 1e-6) {
+    throw new EngineError(
+      `Invariant violation: items net (${netItems}) ≠ net liquidity change ` +
+        `(${netLedger}) in period [${periodStart.toISOString().slice(0, 10)}, ` +
+        `${periodEnd.toISOString().slice(0, 10)}]`
+    );
+  }
+}
+
 export function aggregateCashflowsInPeriod(
   cashFlows: AnyCashFlow[],
   actuals: LiquidityActual[],
@@ -306,32 +352,8 @@ export function aggregateCashflowsInPeriod(
     flows = cashFlows;
   }
 
-  const beforeStart = addDays(periodStart, -1);
-  const startingLiquidity = balanceAt(flows, beforeStart, seedDate, seedBalance);
-
-  const totals = new Map<string, PeriodItem>();
-  for (const cf of flows) {
-    const amount = cashFlowAmount(cf, periodStart, periodEnd);
-    if (amount === 0) {
-      continue;
-    }
-    const absAmount = Math.abs(amount);
-    const existing = totals.get(cf.name);
-    if (existing) {
-      existing.amount += absAmount;
-    } else {
-      totals.set(cf.name, { name: cf.name, direction: cf.direction, amount: absAmount });
-    }
-  }
-
-  const items = [...totals.values()].sort((a, b) => {
-    const ai = a.direction === Direction.Inflow ? 0 : 1;
-    const bi = b.direction === Direction.Inflow ? 0 : 1;
-    if (ai !== bi) {
-      return ai - bi;
-    }
-    return b.amount - a.amount;
-  });
+  const startingLiquidity = balanceAt(flows, addDays(periodStart, -1), seedDate, seedBalance);
+  const items = computeItems(flows, periodStart, periodEnd);
 
   const netItems = items.reduce(
     (s, i) => s + (i.direction === Direction.Inflow ? i.amount : -i.amount),
@@ -339,14 +361,7 @@ export function aggregateCashflowsInPeriod(
   );
   const endingLiquidity = startingLiquidity + netItems;
 
-  const netLedger = endingLiquidity - startingLiquidity;
-  if (Math.abs(netItems - netLedger) > 1e-6) {
-    throw new EngineError(
-      `Invariant violation: items net (${netItems}) ≠ net liquidity change ` +
-        `(${netLedger}) in period [${periodStart.toISOString().slice(0, 10)}, ` +
-        `${periodEnd.toISOString().slice(0, 10)}]`
-    );
-  }
+  checkInvariant(items, startingLiquidity, endingLiquidity, periodStart, periodEnd);
 
   return {
     startingLiquidity,
