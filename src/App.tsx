@@ -40,6 +40,20 @@ export function App() {
   const [state, setState] = useState<State>({ status: "empty" });
   const { theme, toggle } = useTheme();
   const autoRestored = useRef(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    if (menuOpen) {
+      document.addEventListener("click", handleClick);
+    }
+    return () => document.removeEventListener("click", handleClick);
+  }, [menuOpen]);
 
   const loadSheet = useCallback(async (token: string, sheetId: string) => {
     setState({ status: "loading" });
@@ -106,10 +120,84 @@ export function App() {
     <div className="app">
       <header className="app-header">
         <h1>Budgeteer — Liquidity Forecast</h1>
-        <button type="button" className="theme-toggle" onClick={toggle} aria-label="Toggle theme">
-          {theme === "dark" ? "☀" : "☾"}
-        </button>
+        <div className="header-actions">
+          {state.status === "ready" && (
+            <div className="menu-container" ref={menuRef}>
+              <button
+                type="button"
+                className="menu-btn"
+                onClick={() => setMenuOpen((o) => !o)}
+                aria-label="Menu"
+                aria-expanded={menuOpen}
+              >
+                ☰
+              </button>
+            </div>
+          )}
+          <button type="button" className="theme-toggle" onClick={toggle} aria-label="Toggle theme">
+            {theme === "dark" ? "☀" : "☾"}
+          </button>
+        </div>
       </header>
+
+      {state.status === "ready" && menuOpen && (
+        <>
+          <div
+            className="menu-backdrop"
+            role="button"
+            tabIndex={-1}
+            onClick={() => setMenuOpen(false)}
+            onKeyUp={(e) => {
+              if (e.key === "Escape") setMenuOpen(false);
+            }}
+          />
+          <aside className="menu-tray">
+            <div className="menu-tray-header">
+              <h2>Menu</h2>
+              <button
+                type="button"
+                className="menu-close"
+                onClick={() => setMenuOpen(false)}
+                aria-label="Close menu"
+              >
+                ✕
+              </button>
+            </div>
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => {
+                setMenuOpen(false);
+                void loadSheet(state.google.token, state.google.sheetId);
+              }}
+            >
+              Refresh from Sheet
+            </button>
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => {
+                setMenuOpen(false);
+                void pick(state.google.token, () => {});
+              }}
+            >
+              Choose a different sheet
+            </button>
+            <hr className="menu-divider" />
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => {
+                setMenuOpen(false);
+                clearSessionToken();
+                setState({ status: "empty" });
+              }}
+            >
+              Logout
+            </button>
+          </aside>
+        </>
+      )}
 
       {state.status === "ready" ? (
         <Dashboard inputs={state.inputs} />
