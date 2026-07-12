@@ -331,6 +331,15 @@ export function aggregateCashflowsInPeriod(
   );
   const endingLiquidity = startingLiquidity + netItems;
 
+  const netLedger = endingLiquidity - startingLiquidity;
+  if (Math.abs(netItems - netLedger) > 1e-6) {
+    throw new EngineError(
+      `Invariant violation: items net (${netItems}) ≠ net liquidity change ` +
+        `(${netLedger}) in period [${periodStart.toISOString().slice(0, 10)}, ` +
+        `${periodEnd.toISOString().slice(0, 10)}]`
+    );
+  }
+
   return {
     startingLiquidity,
     endingLiquidity,

@@ -387,3 +387,43 @@ describe("actuals re-anchoring", () => {
     expect((ledger[0] as LedgerRow).startingLiquidity).toBe(30000);
   });
 });
+
+describe("aggregateCashflowsInPeriod with actuals", () => {
+  it("excludes one-offs strictly before the latest actual", () => {
+    const cashFlows: AnyCashFlow[] = [
+      new RecurringCashFlow("Salary", Direction.Inflow, 5000, Frequency.Monthly),
+      new RecurringCashFlow("Rent", Direction.Outflow, 2000, Frequency.Monthly),
+      new OneOffCashFlow("Old Bonus", Direction.Inflow, 10000, d(2026, 2, 15)),
+    ];
+    const actuals = [new LiquidityActual(d(2026, 3, 10), 25000)];
+
+    const result = aggregateCashflowsInPeriod(cashFlows, actuals, d(2026, 3, 1), d(2026, 6, 30));
+
+    const oldBonusItem = result.items.find((i) => i.name === "Old Bonus");
+    expect(oldBonusItem).toBeUndefined();
+  });
+
+  it("prorates the seed month from the actual date", () => {
+    const cashFlows: AnyCashFlow[] = [
+      new RecurringCashFlow("Rent", Direction.Outflow, 3000, Frequency.Monthly),
+    ];
+    const actuals = [new LiquidityActual(d(2026, 3, 15), 20000)];
+
+    const result = aggregateCashflowsInPeriod(cashFlows, actuals, d(2026, 3, 15), d(2026, 3, 31));
+
+    const rent = result.items.find((i) => i.name === "Rent");
+    expect(rent).toBeDefined();
+    close((rent as { amount: number }).amount, (3000 * 17) / MONTHLY_PERIOD_DAYS);
+  });
+
+  it("starting liquidity equals the seed amount when period starts at the actual date", () => {
+    const cashFlows: AnyCashFlow[] = [
+      new RecurringCashFlow("Rent", Direction.Outflow, 3000, Frequency.Monthly),
+    ];
+    const actuals = [new LiquidityActual(d(2026, 3, 15), 20000)];
+
+    const result = aggregateCashflowsInPeriod(cashFlows, actuals, d(2026, 3, 15), d(2026, 3, 31));
+
+    expect(result.startingLiquidity).toBe(20000);
+  });
+});
